@@ -10,8 +10,9 @@ INPUT=$(cat)
 # Extract command
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null || echo "")
 
-# If not ai-delegate command, allow
-if ! echo "$COMMAND" | grep -q "ai-delegate"; then
+# Only intercept when ai-delegate is the executable being invoked
+# (starts the command or follows a shell separator), not inside strings/args
+if ! echo "$COMMAND" | grep -qE "(^|;|\|\||&&|\|)\s*ai-delegate(\s|$)"; then
     exit 0
 fi
 
