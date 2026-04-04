@@ -12,6 +12,7 @@ from typing import Optional
 
 from .client import OllamaClient
 from .debate.orchestrator import DebateOrchestrator
+from .memory import AnalysisMemory
 from .models import TaskConfig, Tier
 from .config import (
     TASK_DISPLAY_NAMES,
@@ -53,6 +54,7 @@ def run_analysis(
     verbose: bool = False,
     elicit: Optional[str] = None,
     mode: str = "solo",
+    no_adaptive: bool = False,
 ) -> dict:
     """
     Run multi-expert analysis.
@@ -83,10 +85,31 @@ def run_analysis(
     if model:
         config.default_model = model
 
-    # Create client
+    # Initialize memory for regression detection and adaptive routing
+    memory = None
+    try:
+        memory = AnalysisMemory()
+    except Exception:
+        pass  # Memory is non-critical
+
+    # Select CLI using adaptive routing (or static if no_adaptive / no memory)
+    from .router import get_router, CLIType
+    router = get_router()
+    cli_config, selected_model = router.select_cli_for_task(
+        task_type,
+        memory=memory if not no_adaptive else None,
+        no_adaptive=no_adaptive,
+    )
+    effective_model = model or selected_model
+    if verbose:
+        print(f"CLI: {cli_config.cli_name} | Model: {effective_model}")
+
+    # Create client with selected CLI type and health monitor callback
     client = OllamaClient(
-        model=config.default_model,
+        model=effective_model,
         verbose=verbose,
+        cli_type=cli_config.cli_name,
+        on_cli_error=lambda cli_name, err: router.health_monitor.mark_failed(CLIType(cli_name), err),
     )
 
     if mode == "party":
@@ -106,7 +129,7 @@ def run_analysis(
 
     # Store result in memory and check for regressions (non-critical, best effort)
     try:
-        from .memory import AnalysisMemory, MemoryRecord
+        from .memory import MemoryRecord
         findings = result.get("findings", [])
         record = MemoryRecord(
             file_path=f"<content:{task_type}>",
@@ -117,18 +140,61 @@ def run_analysis(
             high_count=sum(1 for f in findings if f.get("severity", "").lower() == "high"),
             findings_summary="; ".join(f.get("issue", "")[:80] for f in findings[:10]),
         )
-        memory = AnalysisMemory()
+        if memory is None:
+            memory = AnalysisMemory()
         regression = memory.detect_regression(record)
-        memory.store(record)
+        run_id = memory.store(record)
+        memory.record_cli_run(run_id, cli_config.cli_name)
         result["regression"] = regression
+        result["_run_id"] = run_id
+        result["_cli_name"] = cli_config.cli_name
     except Exception:
         pass  # Memory is non-critical
 
     return result
 
 
+def _handle_rate_subcommand(args: list) -> None:
+    """Handle 'ai-delegate rate --last y|n' subcommand."""
+    import argparse as _ap
+    parser = _ap.ArgumentParser(prog="ai-delegate rate")
+    parser.add_argument("--last", choices=["y", "n"], required=True,
+                        help="Rate the most recent run (y=useful, n=not useful)")
+    parsed = parser.parse_args(args)
+
+    memory = AnalysisMemory()
+    with memory._connect() as conn:
+        row = conn.execute(
+            "SELECT id, cli_name, task_type FROM analysis_runs ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+
+    if not row:
+        print("No runs to rate.", file=sys.stderr)
+        sys.exit(1)
+
+    run_id, cli_name, task_type = row
+    rating = 1 if parsed.last == "y" else 0
+    memory.store_rating(run_id, rating)
+
+    perf = memory.get_cli_performance(task_type or "")
+    cli_perf = next((p for p in perf if p["cli_name"] == cli_name), None)
+    if cli_perf:
+        print(
+            f"Rating saved ({cli_name} / {task_type}: "
+            f"{cli_perf['win_count']} wins, {cli_perf['loss_count']} losses)"
+        )
+    else:
+        print("Rating saved")
+    sys.exit(0)
+
+
 def main():
     """Main CLI entry point."""
+    # Handle 'rate' subcommand before main parser (avoids positional arg conflict)
+    if sys.argv[1:2] == ["rate"]:
+        _handle_rate_subcommand(sys.argv[2:])
+        return
+
     parser = argparse.ArgumentParser(
         description="AI Delegation Framework - Multi-expert analysis with debate",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -230,6 +296,16 @@ Examples:
         action="store_true",
         help="Show estimated token usage and cost after analysis",
     )
+    parser.add_argument(
+        "--no-adaptive",
+        action="store_true",
+        help="Disable adaptive CLI routing (use static priority map)",
+    )
+    parser.add_argument(
+        "--no-rating",
+        action="store_true",
+        help="Disable inline rating prompt after analysis",
+    )
 
     args = parser.parse_args()
 
@@ -286,6 +362,7 @@ Examples:
             verbose=args.verbose,
             elicit=elicit,
             mode=args.mode,
+            no_adaptive=args.no_adaptive,
         )
 
         if args.format:
@@ -337,6 +414,18 @@ Examples:
                 f"(+{regression['new_critical']} critical) vs last run",
                 file=sys.stderr,
             )
+
+        # Inline rating prompt (skipped in --no-rating mode and CI/pipe)
+        run_id = result.get("_run_id")
+        if run_id and not args.no_rating:
+            try:
+                rating_input = input(
+                    "Was this result useful? (y/n, Enter to skip): "
+                ).strip().lower()
+                if rating_input in ("y", "n"):
+                    AnalysisMemory().store_rating(run_id, 1 if rating_input == "y" else 0)
+            except EOFError:
+                pass  # CI/pipe safe — silent skip
 
         if args.show_cost:
             from .cost_tracker import CostTracker

@@ -5,7 +5,7 @@ Tests command-line argument parsing and execution.
 """
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 from io import StringIO
 
 from ai_delegate.cli import main, run_analysis, create_task_config
@@ -389,3 +389,116 @@ class TestMainModule:
 
         # Should be callable
         assert callable(module_main)
+
+
+class TestRateSubcommand:
+    @patch("ai_delegate.cli.sys.argv", ["ai-delegate", "rate", "--last", "y"])
+    @patch("ai_delegate.cli.AnalysisMemory")
+    def test_rate_last_y_stores_win(self, mock_memory_cls):
+        mock_memory = MagicMock()
+        mock_memory_cls.return_value = mock_memory
+        mock_memory._connect.return_value.__enter__.return_value.execute.return_value.fetchone.return_value = (
+            42, "ollama", "audit"
+        )
+        mock_memory.get_cli_performance.return_value = [
+            {"cli_name": "ollama", "win_count": 8, "loss_count": 2}
+        ]
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 0
+        mock_memory.store_rating.assert_called_once_with(42, 1)
+
+    @patch("ai_delegate.cli.sys.argv", ["ai-delegate", "rate", "--last", "n"])
+    @patch("ai_delegate.cli.AnalysisMemory")
+    def test_rate_last_n_stores_loss(self, mock_memory_cls):
+        mock_memory = MagicMock()
+        mock_memory_cls.return_value = mock_memory
+        mock_memory._connect.return_value.__enter__.return_value.execute.return_value.fetchone.return_value = (
+            42, "ollama", "audit"
+        )
+        mock_memory.get_cli_performance.return_value = []
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 0
+        mock_memory.store_rating.assert_called_once_with(42, 0)
+
+    @patch("ai_delegate.cli.sys.argv", ["ai-delegate", "rate", "--last", "y"])
+    @patch("ai_delegate.cli.AnalysisMemory")
+    def test_rate_no_runs_exits_with_error(self, mock_memory_cls):
+        mock_memory = MagicMock()
+        mock_memory_cls.return_value = mock_memory
+        mock_memory._connect.return_value.__enter__.return_value.execute.return_value.fetchone.return_value = None
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 1
+
+
+class TestNoAdaptiveFlag:
+    @patch("ai_delegate.cli.run_analysis")
+    @patch("sys.stdin")
+    def test_no_adaptive_passed_to_run_analysis(self, mock_stdin, mock_run):
+        mock_stdin.isatty.return_value = False
+        mock_stdin.read.return_value = "some code"
+        mock_run.return_value = {
+            "task_type": "audit", "consensus_score": 0.75,
+            "tier_used": "standard", "findings": [],
+            "recommendations": [], "action_items": [],
+        }
+        with patch("sys.argv", ["ai-delegate", "audit", "--no-adaptive", "--no-rating"]):
+            main()
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs.get("no_adaptive") is True
+
+
+class TestInlineRatingPrompt:
+    @patch("ai_delegate.cli.run_analysis")
+    @patch("ai_delegate.cli.AnalysisMemory")
+    @patch("builtins.input", return_value="y")
+    @patch("sys.stdin")
+    def test_rating_prompt_shown_after_analysis(
+        self, mock_stdin, mock_input, mock_memory_cls, mock_run
+    ):
+        mock_stdin.isatty.return_value = False
+        mock_stdin.read.return_value = "some code"
+        mock_memory = MagicMock()
+        mock_memory_cls.return_value = mock_memory
+        mock_run.return_value = {
+            "task_type": "audit", "consensus_score": 0.75,
+            "tier_used": "standard", "findings": [],
+            "recommendations": [], "action_items": [],
+            "_run_id": 42,
+        }
+        with patch("sys.argv", ["ai-delegate", "audit"]):
+            main()
+        mock_memory.store_rating.assert_called_once_with(42, 1)
+
+    @patch("ai_delegate.cli.run_analysis")
+    @patch("builtins.input", side_effect=EOFError)
+    @patch("sys.stdin")
+    def test_eof_in_rating_prompt_is_silent(self, mock_stdin, mock_input, mock_run):
+        mock_stdin.isatty.return_value = False
+        mock_stdin.read.return_value = "some code"
+        mock_run.return_value = {
+            "task_type": "audit", "consensus_score": 0.75,
+            "tier_used": "standard", "findings": [],
+            "recommendations": [], "action_items": [],
+            "_run_id": 42,
+        }
+        with patch("sys.argv", ["ai-delegate", "audit"]):
+            main()  # Should not raise
+
+    @patch("ai_delegate.cli.run_analysis")
+    @patch("builtins.input", return_value="y")
+    @patch("sys.stdin")
+    def test_no_rating_flag_skips_prompt(self, mock_stdin, mock_input, mock_run):
+        mock_stdin.isatty.return_value = False
+        mock_stdin.read.return_value = "some code"
+        mock_run.return_value = {
+            "task_type": "audit", "consensus_score": 0.75,
+            "tier_used": "standard", "findings": [],
+            "recommendations": [], "action_items": [],
+            "_run_id": 42,
+        }
+        with patch("sys.argv", ["ai-delegate", "audit", "--no-rating"]):
+            main()
+        mock_input.assert_not_called()
