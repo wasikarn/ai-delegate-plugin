@@ -12,7 +12,7 @@ import atexit
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, ClassVar
 
-from ..client import OllamaClient
+from ..client import BackendClient
 from ..models import (
     Finding,
     ExpertResult,
@@ -55,21 +55,21 @@ def build_findings(
 
 
 def _resolve_client(
-    base_client: "OllamaClient",
+    base_client: "BackendClient",
     task_config: "TaskConfig",
     expert_name: str,
-) -> "OllamaClient":
+) -> "BackendClient":
     """
     Return the appropriate client for an expert.
 
     If task_config.expert_models has a model override for this expert AND it
-    differs from the base client's model, create and return a new OllamaClient
+    differs from the base client's model, create and return a new BackendClient
     with the override model. Otherwise return base_client unchanged.
     """
     model = task_config.expert_models.get(expert_name)
     if not model or model == getattr(base_client, "model", None):
         return base_client
-    return OllamaClient(
+    return BackendClient(
         model=model,
         fallback_model=getattr(base_client, "fallback_model", "sonnet"),
         verbose=getattr(base_client, "verbose", False),
@@ -187,7 +187,7 @@ class ExpertRunner:
     # Shared thread pool for all instances
     _executor: ClassVar[ThreadPoolExecutor] = ThreadPoolExecutor(max_workers=WorkerConstants.ORCHESTRATOR_MAX_WORKERS)
 
-    def __init__(self, client: OllamaClient, task_config: TaskConfig, verbose: bool = False,
+    def __init__(self, client: BackendClient, task_config: TaskConfig, verbose: bool = False,
                  context_prefix: str = ""):
         self.client = client
         self.task_config = task_config
@@ -325,7 +325,7 @@ ExpertRunner._register_cleanup()
 class Adjudicator:
     """Synthesizes final verdict from expert debates."""
 
-    def __init__(self, client: OllamaClient, task_config: TaskConfig, verbose: bool = False):
+    def __init__(self, client: BackendClient, task_config: TaskConfig, verbose: bool = False):
         self.client = client
         self.task_config = task_config
         self.verbose = verbose
@@ -437,7 +437,7 @@ Output your evaluation as JSON:
 class DebatePhase:
     """Runs debate rounds between experts."""
 
-    def __init__(self, client: OllamaClient, task_config: TaskConfig, verbose: bool = False):
+    def __init__(self, client: BackendClient, task_config: TaskConfig, verbose: bool = False):
         self.client = client
         self.task_config = task_config
         self.verbose = verbose
@@ -576,7 +576,7 @@ class DebateOrchestrator:
 
     def __init__(
         self,
-        client: OllamaClient,
+        client: BackendClient,
         task_config: TaskConfig,
         verbose: bool = False,
     ):
@@ -584,7 +584,7 @@ class DebateOrchestrator:
         Initialize orchestrator.
 
         Args:
-            client: OllamaClient instance
+            client: BackendClient instance
             task_config: Task configuration
             verbose: Enable verbose logging
         """

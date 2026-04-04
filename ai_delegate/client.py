@@ -8,7 +8,7 @@ Architecture follows Single Responsibility Principle:
 - RateLimiter: retry & backoff logic
 - OutputProcessor: stripping thinking prefix
 - ResponseParser: JSON parsing
-- OllamaClient: orchestrates components
+- BackendClient: orchestrates components
 """
 
 import subprocess
@@ -284,7 +284,7 @@ def _classify_cli_error(error_text: str) -> Optional[str]:
 # Main Client (Composed)
 # =============================================================================
 
-class OllamaClient(AIClient):
+class BackendClient(AIClient):
     """
     Client for Ollama CLI with rate limiting and fallback support.
 
@@ -528,9 +528,9 @@ def create_client(
     fallback_model: str = Models.CLAUDE_SONNET,
     verbose: bool = False,
     strict_validation: bool = False,
-) -> OllamaClient:
+) -> BackendClient:
     """
-    Create an OllamaClient with default configuration.
+    Create an BackendClient with default configuration.
 
     Args:
         model: Primary model to use
@@ -539,9 +539,9 @@ def create_client(
         strict_validation: Enable strict prompt validation
 
     Returns:
-        Configured OllamaClient
+        Configured BackendClient
     """
-    return OllamaClient(
+    return BackendClient(
         model=model,
         fallback_model=fallback_model,
         verbose=verbose,

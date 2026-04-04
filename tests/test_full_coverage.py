@@ -9,7 +9,7 @@ import subprocess
 import sys
 import logging
 
-from ai_delegate.client import OllamaClient
+from ai_delegate.client import BackendClient
 from ai_delegate.debate.orchestrator import Adjudicator, DebatePhase, ConsensusCalculator, build_findings
 from ai_delegate.models import TaskConfig, ExpertResult
 
@@ -74,7 +74,7 @@ class TestClientLoggingPaths:
         """Test verbose logging path (line 161)."""
         caplog.set_level(logging.INFO)
         mock_which.return_value = "/usr/local/bin/ollama"
-        client = OllamaClient(model="test-model", verbose=True)
+        client = BackendClient(model="test-model", verbose=True)
 
         with patch.object(client, "_run_ollama", return_value="output"):
             result = client.run("test prompt")
@@ -89,7 +89,7 @@ class TestClientLoggingPaths:
             "claude": None,
         }.get(cmd)
 
-        client = OllamaClient(model="test-model")
+        client = BackendClient(model="test-model")
         assert client._claude_available is False
 
 
@@ -100,7 +100,7 @@ class TestClientRunOllamaPaths:
     def client(self):
         with patch("ai_delegate.client.shutil.which") as mock:
             mock.return_value = "/usr/local/bin/ollama"
-            return OllamaClient(model="test-model")
+            return BackendClient(model="test-model")
 
     @patch("ai_delegate.client.subprocess.run")
     def test_run_ollama_verbose_logging(self, mock_run, client):
@@ -137,7 +137,7 @@ class TestClientFallbackPaths:
             "claude": "/usr/local/bin/claude",
         }.get(cmd)
         mock_run.return_value = Mock(returncode=0, stdout="Claude response", stderr="")
-        client = OllamaClient(model="test-model")
+        client = BackendClient(model="test-model")
         result = client._run_fallback("prompt")
         assert result == "Claude response"
 
@@ -148,7 +148,7 @@ class TestClientFallbackPaths:
             "ollama": "/usr/local/bin/ollama",
             "claude": "/usr/local/bin/claude",
         }.get(cmd)
-        client = OllamaClient(model="test-model")
+        client = BackendClient(model="test-model")
         with patch("ai_delegate.client.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired("claude", 300)
             with pytest.raises(RuntimeError, match="timed out"):
@@ -162,7 +162,7 @@ class TestClientAsyncPaths:
     def client(self):
         with patch("ai_delegate.client.shutil.which") as mock:
             mock.return_value = "/usr/local/bin/ollama"
-            return OllamaClient(model="test-model")
+            return BackendClient(model="test-model")
 
     def test_run_parallel_async_execution(self, client):
         """Test async run_parallel execution."""
@@ -183,7 +183,7 @@ class TestOrchestratorEmptyResults:
 
     @pytest.fixture
     def mock_client(self):
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {"findings": []}
         return client
 
@@ -222,7 +222,7 @@ class TestDebatePhaseEmptyResults:
 
     @pytest.fixture
     def mock_client(self):
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {"findings": []}
         return client
 
@@ -253,7 +253,7 @@ class TestClientAbstractMethods:
 
         with patch("ai_delegate.client.shutil.which") as mock:
             mock.return_value = "/usr/local/bin/ollama"
-            client = OllamaClient(model="test-model")
+            client = BackendClient(model="test-model")
 
         assert callable(client.run)
         assert callable(client.run_json)
@@ -266,7 +266,7 @@ class TestClientCommandFailure:
         """Test _run_ollama with stderr in failure."""
         with patch("ai_delegate.client.shutil.which") as mock_which:
             mock_which.return_value = "/usr/local/bin/ollama"
-            client = OllamaClient(model="test-model")
+            client = BackendClient(model="test-model")
 
         with patch("ai_delegate.client.subprocess.run") as mock_run:
             mock_run.return_value = Mock(returncode=1, stdout="", stderr="Error: model not found")

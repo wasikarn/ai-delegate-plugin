@@ -8,7 +8,7 @@ Supports multiple backends: ollama, gemini, codex.
 __version__ = "0.3.0"
 __author__ = "KoBig"
 
-from .client import AIClient, OllamaClient
+from .client import AIClient, BackendClient
 from .config import (
     TASK_DISPLAY_NAMES,
     TASK_EXPERT_DESCRIPTIONS,
@@ -55,7 +55,7 @@ from .constants import (
 __all__ = [
     # Clients
     "AIClient",
-    "OllamaClient",
+    "BackendClient",
     # Models
     "Finding",
     "Verdict",

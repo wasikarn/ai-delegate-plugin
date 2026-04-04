@@ -7,7 +7,7 @@ Tests parallel expert execution with mocked clients.
 import pytest
 from unittest.mock import Mock
 
-from ai_delegate.client import OllamaClient
+from ai_delegate.client import BackendClient
 from ai_delegate.models import TaskConfig
 from ai_delegate.debate.orchestrator import ExpertRunner
 
@@ -17,8 +17,8 @@ class TestExpertRunner:
 
     @pytest.fixture
     def mock_client(self) -> Mock:
-        """Create mock OllamaClient."""
-        client = Mock(spec=OllamaClient)
+        """Create mock BackendClient."""
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {
             "findings": [
                 {"severity": "high", "issue": "XSS vulnerability"},
@@ -149,7 +149,7 @@ class TestExpertRunnerParallelExecution:
     @pytest.fixture
     def slow_client(self) -> Mock:
         """Create client that simulates slow responses."""
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         import time
 
         def slow_response(prompt):
@@ -184,7 +184,7 @@ class TestExpertRunnerEdgeCases:
     @pytest.fixture
     def mock_client(self) -> Mock:
         """Create mock client for edge cases."""
-        return Mock(spec=OllamaClient)
+        return Mock(spec=BackendClient)
 
     @pytest.fixture
     def task_config(self) -> TaskConfig:

@@ -59,7 +59,7 @@ class TestCreateTaskConfig:
 class TestRunAnalysis:
     """Tests for run_analysis function."""
 
-    @patch("ai_delegate.cli.OllamaClient")
+    @patch("ai_delegate.cli.BackendClient")
     @patch("ai_delegate.cli.DebateOrchestrator")
     def test_run_analysis_basic(self, mock_orchestrator_class, mock_client_class):
         """run_analysis creates client and orchestrator correctly."""
@@ -89,7 +89,7 @@ class TestRunAnalysis:
         mock_client_class.assert_called_once()
         mock_orchestrator_class.assert_called_once()
 
-    @patch("ai_delegate.cli.OllamaClient")
+    @patch("ai_delegate.cli.BackendClient")
     @patch("ai_delegate.cli.DebateOrchestrator")
     def test_run_analysis_with_model_override(self, mock_orchestrator_class, mock_client_class):
         """run_analysis uses custom model when specified."""
@@ -112,7 +112,7 @@ class TestRunAnalysis:
         call_args = mock_client_class.call_args
         assert call_args.kwargs["model"] == "custom-model"
 
-    @patch("ai_delegate.cli.OllamaClient")
+    @patch("ai_delegate.cli.BackendClient")
     @patch("ai_delegate.cli.DebateOrchestrator")
     def test_run_analysis_verbose(self, mock_orchestrator_class, mock_client_class):
         """run_analysis passes verbose flag."""

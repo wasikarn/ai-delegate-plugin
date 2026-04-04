@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .client import OllamaClient
+from .client import BackendClient
 from .debate.orchestrator import DebateOrchestrator
 from .memory import AnalysisMemory
 from .models import TaskConfig, Tier
@@ -105,7 +105,7 @@ def run_analysis(
         print(f"CLI: {cli_config.cli_name} | Model: {effective_model}")
 
     # Create client with selected CLI type and health monitor callback
-    client = OllamaClient(
+    client = BackendClient(
         model=effective_model,
         verbose=verbose,
         cli_type=cli_config.cli_name,

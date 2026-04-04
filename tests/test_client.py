@@ -1,5 +1,5 @@
 """
-Tests for OllamaClient and SRP components.
+Tests for BackendClient and SRP components.
 
 Tests rate limiting, retry logic, output processing, and fallback behavior.
 """
@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 from typing import Any
 
 from ai_delegate.client import (
-    OllamaClient,
+    BackendClient,
     RateLimitError,
     CLIExecutor,
     RateLimiter,
@@ -240,18 +240,18 @@ class TestRateLimitError:
 
 
 # =============================================================================
-# OllamaClient Tests
+# BackendClient Tests
 # =============================================================================
 
-class TestOllamaClientInit:
-    """Tests for OllamaClient initialization."""
+class TestBackendClientInit:
+    """Tests for BackendClient initialization."""
 
     @patch("ai_delegate.client.shutil.which")
     def test_init_with_ollama_installed(self, mock_which: Mock):
         """Initialization succeeds when ollama is installed."""
         mock_which.return_value = "/usr/local/bin/ollama"
 
-        client = OllamaClient(model="test-model")
+        client = BackendClient(model="test-model")
 
         assert client.model == "test-model"
 
@@ -261,14 +261,14 @@ class TestOllamaClientInit:
         mock_which.return_value = None
 
         with pytest.raises(RuntimeError, match="Ollama is not installed"):
-            OllamaClient(model="test-model")
+            BackendClient(model="test-model")
 
     @patch("ai_delegate.client.shutil.which")
     def test_init_warns_without_claude_fallback(self, mock_which: Mock, caplog):
         """Initialization warns when Claude CLI is not available."""
         mock_which.side_effect = lambda cmd: "/usr/local/bin/ollama" if cmd == "ollama" else None
 
-        OllamaClient(model="test-model")
+        BackendClient(model="test-model")
 
         assert "Claude CLI not found" in caplog.text or True
 
@@ -282,7 +282,7 @@ class TestOllamaClientInit:
         processor = OutputProcessor()
         parser = ResponseParser()
 
-        client = OllamaClient(
+        client = BackendClient(
             model="test-model",
             executor=executor,
             rate_limiter=limiter,
@@ -296,8 +296,8 @@ class TestOllamaClientInit:
         assert client.response_parser is parser
 
 
-class TestOllamaClientRun:
-    """Tests for OllamaClient.run method."""
+class TestBackendClientRun:
+    """Tests for BackendClient.run method."""
 
     @pytest.fixture
     def mock_executor(self) -> CLIExecutor:
@@ -308,13 +308,13 @@ class TestOllamaClientRun:
         return executor
 
     @pytest.fixture
-    def client(self, mock_executor: CLIExecutor) -> OllamaClient:
-        """Create OllamaClient with mocked executor."""
+    def client(self, mock_executor: CLIExecutor) -> BackendClient:
+        """Create BackendClient with mocked executor."""
         with patch("ai_delegate.client.shutil.which") as mock_which:
             mock_which.return_value = "/usr/local/bin/ollama"
-            return OllamaClient(model="test-model", executor=mock_executor)
+            return BackendClient(model="test-model", executor=mock_executor)
 
-    def test_run_returns_output(self, client: OllamaClient, mock_executor: Mock):
+    def test_run_returns_output(self, client: BackendClient, mock_executor: Mock):
         """run returns model output on success."""
         mock_executor.execute.return_value = "Model output"
 
@@ -323,7 +323,7 @@ class TestOllamaClientRun:
         assert result == "Model output"
         mock_executor.execute.assert_called_once()
 
-    def test_run_strips_thinking_prefix(self, client: OllamaClient, mock_executor: Mock):
+    def test_run_strips_thinking_prefix(self, client: BackendClient, mock_executor: Mock):
         """run strips 'Thinking' prefix from output."""
         mock_executor.execute.return_value = "Thinking about the problem...\nThe answer is 42"
 
@@ -332,7 +332,7 @@ class TestOllamaClientRun:
         assert "Thinking" not in result
         assert "The answer is 42" in result
 
-    def test_run_retries_on_rate_limit(self, client: OllamaClient, mock_executor: Mock):
+    def test_run_retries_on_rate_limit(self, client: BackendClient, mock_executor: Mock):
         """run retries on temporary rate limit."""
         # First call fails, second succeeds
         mock_executor.execute.side_effect = [
@@ -356,55 +356,55 @@ class TestOllamaClientRun:
 
         with patch("ai_delegate.client.shutil.which") as mock_which:
             mock_which.return_value = "/usr/local/bin/ollama"
-            client = OllamaClient(model="test-model", executor=mock_executor)
+            client = BackendClient(model="test-model", executor=mock_executor)
 
             result = client.run("test prompt")
 
         assert result == "Claude response"
 
 
-class TestOllamaClientRunJson:
-    """Tests for OllamaClient.run_json method."""
+class TestBackendClientRunJson:
+    """Tests for BackendClient.run_json method."""
 
     @pytest.fixture
-    def client(self) -> OllamaClient:
-        """Create OllamaClient with mocked dependencies."""
+    def client(self) -> BackendClient:
+        """Create BackendClient with mocked dependencies."""
         with patch("ai_delegate.client.shutil.which") as mock:
             mock.return_value = "/usr/local/bin/ollama"
-            return OllamaClient(model="test-model", verbose=False)
+            return BackendClient(model="test-model", verbose=False)
 
-    def test_run_json_returns_dict(self, client: OllamaClient):
+    def test_run_json_returns_dict(self, client: BackendClient):
         """run_json returns parsed JSON dict."""
         with patch.object(client, "run", return_value='{"key": "value"}'):
             result = client.run_json("test prompt")
 
         assert result == {"key": "value"}
 
-    def test_run_json_extracts_json_from_mixed_output(self, client: OllamaClient):
+    def test_run_json_extracts_json_from_mixed_output(self, client: BackendClient):
         """run_json extracts JSON from mixed output."""
         with patch.object(client, "run", return_value='Some text {"key": "value"} more text'):
             result = client.run_json("test prompt")
 
         assert result == {"key": "value"}
 
-    def test_run_json_raises_on_invalid_json(self, client: OllamaClient):
+    def test_run_json_raises_on_invalid_json(self, client: BackendClient):
         """run_json raises ValueError on invalid JSON."""
         with patch.object(client, "run", return_value="not json at all"):
             with pytest.raises(ValueError, match="Could not parse JSON"):
                 client.run_json("test prompt")
 
 
-class TestOllamaClientAsync:
+class TestBackendClientAsync:
     """Tests for async run_parallel method."""
 
     @pytest.fixture
-    def client(self) -> OllamaClient:
-        """Create OllamaClient with mocked dependencies."""
+    def client(self) -> BackendClient:
+        """Create BackendClient with mocked dependencies."""
         with patch("ai_delegate.client.shutil.which") as mock:
             mock.return_value = "/usr/local/bin/ollama"
-            return OllamaClient(model="test-model")
+            return BackendClient(model="test-model")
 
-    def test_run_parallel_returns_results(self, client: OllamaClient):
+    def test_run_parallel_returns_results(self, client: BackendClient):
         """run_parallel returns results in order."""
         import asyncio
 
@@ -416,7 +416,7 @@ class TestOllamaClientAsync:
             assert sorted(results) == ["result1", "result2", "result3"]
             assert mock_run.call_count == 3
 
-    def test_run_parallel_empty_prompts(self, client: OllamaClient):
+    def test_run_parallel_empty_prompts(self, client: BackendClient):
         """run_parallel handles empty prompt list."""
         import asyncio
 
@@ -485,7 +485,7 @@ class TestRunOllamaStdinFix:
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
     def test_ollama_uses_stdin_not_arg(self, mock_which, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
-        client = OllamaClient(model="glm-5:cloud")
+        client = BackendClient(model="glm-5:cloud")
         client.run("my prompt", json_output=False)
         call_args = mock_run.call_args
         cmd = call_args[0][0]
@@ -496,7 +496,7 @@ class TestRunOllamaStdinFix:
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
     def test_ollama_json_format_uses_two_args(self, mock_which, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
-        client = OllamaClient(model="glm-5:cloud")
+        client = BackendClient(model="glm-5:cloud")
         client.run("my prompt", json_output=True)
         cmd = mock_run.call_args[0][0]
         assert "--format" in cmd
@@ -509,7 +509,7 @@ class TestRunCodex:
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
     def test_run_codex_uses_exec_full_auto(self, mock_which, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="analysis result", stderr="")
-        client = OllamaClient(model="glm-5:cloud", cli_type="codex")
+        client = BackendClient(model="glm-5:cloud", cli_type="codex")
         client.run("analyze this", json_output=False)
         cmd = mock_run.call_args[0][0]
         assert "codex" in cmd
@@ -520,7 +520,7 @@ class TestRunCodex:
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
     def test_run_codex_passes_prompt_via_stdin(self, mock_which, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
-        client = OllamaClient(model="o3-mini", cli_type="codex")
+        client = BackendClient(model="o3-mini", cli_type="codex")
         client.run("my prompt", json_output=False)
         assert mock_run.call_args[1].get("input") == "my prompt"
 
@@ -530,7 +530,7 @@ class TestRunGemini:
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
     def test_run_gemini_uses_yolo_flag(self, mock_which, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
-        client = OllamaClient(model="gemini-2.0-flash", cli_type="gemini")
+        client = BackendClient(model="gemini-2.0-flash", cli_type="gemini")
         client.run("analyze", json_output=False)
         cmd = mock_run.call_args[0][0]
         assert "gemini" in cmd
@@ -540,7 +540,7 @@ class TestRunGemini:
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
     def test_run_gemini_uses_p_flag(self, mock_which, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
-        client = OllamaClient(model="gemini-2.0-flash", cli_type="gemini")
+        client = BackendClient(model="gemini-2.0-flash", cli_type="gemini")
         client.run("my prompt", json_output=False)
         cmd = mock_run.call_args[0][0]
         assert "-p" in cmd
@@ -556,7 +556,7 @@ class TestErrorClassification:
             returncode=1, stdout="", stderr="429 rate limit exceeded"
         )
         error_calls = []
-        client = OllamaClient(
+        client = BackendClient(
             model="glm-5:cloud",
             max_retries=1,
             on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),
@@ -572,7 +572,7 @@ class TestErrorClassification:
             returncode=1, stdout="", stderr="401 unauthorized"
         )
         error_calls = []
-        client = OllamaClient(
+        client = BackendClient(
             model="glm-5:cloud",
             max_retries=1,
             on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),

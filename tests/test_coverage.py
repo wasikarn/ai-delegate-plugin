@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import asyncio
 
-from ai_delegate.client import OllamaClient, RateLimitError
+from ai_delegate.client import BackendClient, RateLimitError
 from ai_delegate.debate.orchestrator import ExpertRunner, DebateOrchestrator, ConsensusCalculator
 from ai_delegate.models import TaskConfig, ExpertResult, Finding, Verdict, Tier
 
@@ -32,7 +32,7 @@ class TestMainModuleExecution:
 
 
 class TestClientInit:
-    """Tests for OllamaClient initialization."""
+    """Tests for BackendClient initialization."""
 
     def test_init_without_ollama_raises(self):
         """Initialization raises RuntimeError when ollama is not installed."""
@@ -40,7 +40,7 @@ class TestClientInit:
             mock_which.return_value = None
 
             with pytest.raises(RuntimeError, match="Ollama is not installed"):
-                OllamaClient(model="test-model")
+                BackendClient(model="test-model")
 
     def test_init_without_claude_fallback_logs_warning(self, caplog):
         """Initialization logs warning when Claude CLI is not available."""
@@ -50,7 +50,7 @@ class TestClientInit:
                 "claude": None,
             }.get(cmd)
 
-            OllamaClient(model="test-model")
+            BackendClient(model="test-model")
 
             # Check log warning
             import logging
@@ -62,13 +62,13 @@ class TestClientRunJsonErrors:
     """Tests for run_json error handling."""
 
     @pytest.fixture
-    def client(self) -> OllamaClient:
-        """Create OllamaClient with mocked dependencies."""
+    def client(self) -> BackendClient:
+        """Create BackendClient with mocked dependencies."""
         with patch("ai_delegate.client.shutil.which") as mock:
             mock.return_value = "/usr/local/bin/ollama"
-            return OllamaClient(model="test-model")
+            return BackendClient(model="test-model")
 
-    def test_run_json_with_nested_json(self, client: OllamaClient):
+    def test_run_json_with_nested_json(self, client: BackendClient):
         """run_json handles nested JSON objects."""
         nested_json = '{"outer": {"inner": {"key": "value"}}}'
 
@@ -77,7 +77,7 @@ class TestClientRunJsonErrors:
 
             assert result == {"outer": {"inner": {"key": "value"}}}
 
-    def test_run_json_with_array(self, client: OllamaClient):
+    def test_run_json_with_array(self, client: BackendClient):
         """run_json handles JSON arrays."""
         json_array = '[{"id": 1}, {"id": 2}]'
 
@@ -91,11 +91,11 @@ class TestClientRunEdgeCases:
     """Tests for run method edge cases."""
 
     @pytest.fixture
-    def client(self) -> OllamaClient:
-        """Create OllamaClient with mocked dependencies."""
+    def client(self) -> BackendClient:
+        """Create BackendClient with mocked dependencies."""
         with patch("ai_delegate.client.shutil.which") as mock:
             mock.return_value = "/usr/local/bin/ollama"
-            return OllamaClient(model="test-model", max_retries=2)
+            return BackendClient(model="test-model", max_retries=2)
 
     @patch("ai_delegate.client.time.sleep")
     def test_run_retries_with_exponential_backoff(self, mock_sleep, client):
@@ -132,7 +132,7 @@ class TestExpertRunnerEdgeCases:
     @pytest.fixture
     def mock_client(self) -> Mock:
         """Create mock AI client."""
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {"findings": []}
         return client
 
@@ -225,7 +225,7 @@ class TestDebateOrchestratorErrorPaths:
     @pytest.fixture
     def mock_client(self) -> Mock:
         """Create mock AI client."""
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {
             "findings": [{"severity": "high", "issue": "XSS"}],
         }

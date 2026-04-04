@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import Mock, patch
 from typing import Any
 
-from ai_delegate.client import OllamaClient
+from ai_delegate.client import BackendClient
 from ai_delegate.models import TaskConfig, ExpertResult, Finding, Tier, Verdict
 from ai_delegate.debate.orchestrator import DebateOrchestrator, ConsensusCalculator, DebatePhase, ExpertRunner
 
@@ -19,7 +19,7 @@ class TestDebateOrchestrator:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock AI client with realistic responses."""
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
 
         def mock_run_json(prompt: str) -> dict:
             """Simulate realistic AI responses based on prompt content."""
@@ -176,7 +176,7 @@ class TestDebateOrchestratorComponents:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock client."""
-        return Mock(spec=OllamaClient)
+        return Mock(spec=BackendClient)
 
     @pytest.fixture
     def audit_config(self) -> TaskConfig:
@@ -243,7 +243,7 @@ class TestDebateOrchestratorTierSelection:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock client."""
-        return Mock(spec=OllamaClient)
+        return Mock(spec=BackendClient)
 
     @pytest.fixture
     def audit_config(self) -> TaskConfig:
@@ -348,7 +348,7 @@ class TestHeterogeneousModels:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock client."""
-        return Mock(spec=OllamaClient)
+        return Mock(spec=BackendClient)
 
     @pytest.fixture
     def audit_config(self) -> TaskConfig:
@@ -394,8 +394,8 @@ class TestHeterogeneousModels:
         # Set expert_models to different model
         audit_config.expert_models = {"owasp": "override-model"}
 
-        with patch("ai_delegate.debate.orchestrator.OllamaClient") as MockClient:
-            mock_new_client = Mock(spec=OllamaClient)
+        with patch("ai_delegate.debate.orchestrator.BackendClient") as MockClient:
+            mock_new_client = Mock(spec=BackendClient)
             MockClient.return_value = mock_new_client
 
             result = _resolve_client(mock_client, audit_config, "owasp")
@@ -453,7 +453,7 @@ class TestDebateOrchestratorEdgeCases:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock client."""
-        return Mock(spec=OllamaClient)
+        return Mock(spec=BackendClient)
 
     @pytest.fixture
     def audit_config(self) -> TaskConfig:
@@ -561,7 +561,7 @@ class TestSparseTopology:
 
     @pytest.fixture
     def mock_client(self) -> Any:
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {"findings": [{"severity": "high", "issue": "Test"}]}
         return client
 

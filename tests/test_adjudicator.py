@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import Mock
 from typing import Any
 
-from ai_delegate.client import OllamaClient
+from ai_delegate.client import BackendClient
 from ai_delegate.models import TaskConfig, ExpertResult, Verdict, Finding, Tier
 from ai_delegate.debate.orchestrator import Adjudicator, build_findings
 
@@ -19,7 +19,7 @@ class TestAdjudicator:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock AI client."""
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {
             "findings": [
                 {"severity": "high", "issue": "SQL injection"},
@@ -192,7 +192,7 @@ class TestAdjudicatorPromptConstruction:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock client."""
-        return Mock(spec=OllamaClient)
+        return Mock(spec=BackendClient)
 
     @pytest.fixture
     def task_config(self) -> TaskConfig:
@@ -275,7 +275,7 @@ class TestAdjudicatorEdgeCases:
     @pytest.fixture
     def mock_client(self) -> Any:
         """Create mock client."""
-        return Mock(spec=OllamaClient)
+        return Mock(spec=BackendClient)
 
     @pytest.fixture
     def task_config(self) -> TaskConfig:
