@@ -141,37 +141,36 @@ class TestSupervisor:
         assert config.budget_mode == True
         assert config.model == "glm-5:cloud"
 
-    def test_delegate_success(self):
-        """delegate should execute task and return result."""
+    def test_execute_task_success(self):
+        """execute_task should execute callable and return TaskResult."""
         supervisor = Supervisor()
         task = Mock(return_value={"result": "success"})
 
-        result = supervisor.delegate(WorkerType.CODE, task, "arg1", key="value")
+        result = supervisor.execute_task(WorkerType.CODE, task, "arg1", key="value")
 
         assert result.success == True
         assert result.result == {"result": "success"}
         task.assert_called_once_with("arg1", key="value")
 
-    def test_delegate_failure(self):
-        """delegate should catch exceptions."""
+    def test_execute_task_failure(self):
+        """execute_task should catch exceptions and return failed TaskResult."""
         supervisor = Supervisor()
         task = Mock(side_effect=ValueError("Task error"))
 
-        result = supervisor.delegate(WorkerType.CODE, task)
+        result = supervisor.execute_task(WorkerType.CODE, task)
 
         assert result.success == False
         assert result.error == "Task error"
 
-    def test_delegate_unknown_worker_type(self):
-        """delegate should handle unknown worker type."""
+    def test_execute_task_unknown_worker_type(self):
+        """execute_task with unknown worker type still executes the callable."""
         supervisor = Supervisor()
-        task = Mock()
+        task = Mock(return_value="done")
 
-        # Create an invalid worker type scenario
-        result = supervisor.delegate("unknown", task)  # type: ignore
+        result = supervisor.execute_task("unknown", task)  # type: ignore
 
-        assert result.success == False
-        assert "No worker configured" in result.error  # type: ignore
+        assert result.success == True
+        assert result.result == "done"
 
     def test_delegate_parallel(self):
         """delegate_parallel should run tasks in parallel."""

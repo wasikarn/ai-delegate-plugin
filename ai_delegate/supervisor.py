@@ -154,7 +154,7 @@ class Supervisor:
         self.max_workers = max_workers
         self.workers = BUDGET_WORKERS if budget_mode else DEFAULT_WORKERS
 
-    def delegate(
+    def execute_task(
         self,
         task_type: WorkerType,
         task: Callable,
@@ -162,26 +162,21 @@ class Supervisor:
         **kwargs
     ) -> TaskResult:
         """
-        Delegate a task to a worker.
+        Execute a task and wrap exceptions in TaskResult.
+
+        No AI routing is performed — the callable is responsible for its own
+        model/CLI selection. Use get_worker_config(task_type) to retrieve
+        the reference config if needed.
 
         Args:
-            task_type: Type of worker to use
-            task: Task function to execute
-            *args: Task arguments
-            **kwargs: Task keyword arguments
+            task_type: Worker type (used for result metadata and logging only)
+            task: Callable to execute
+            *args: Positional arguments forwarded to task
+            **kwargs: Keyword arguments forwarded to task
 
         Returns:
-            TaskResult with execution result
+            TaskResult with execution result or error
         """
-        worker_config = self.workers.get(task_type)
-        if not worker_config:
-            return TaskResult(
-                worker_type=task_type,
-                success=False,
-                result=None,
-                error=f"No worker configured for {task_type}"
-            )
-
         try:
             result = task(*args, **kwargs)
             return TaskResult(
@@ -222,7 +217,7 @@ class Supervisor:
                 kwargs = task_info.get("kwargs", {})
 
                 future = executor.submit(
-                    self.delegate,
+                    self.execute_task,
                     task_type,
                     task,
                     *args,
