@@ -13,6 +13,8 @@ from typing import Dict, Any, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
+from .constants import Models, RetryConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 class RateLimitError(Exception):
     """Rate limit error from AI API."""
     message: str
-    retry_after: int = 2
+    retry_after: int = RetryConfig.INITIAL_DELAY
     permanent: bool = False
 
 
@@ -55,10 +57,10 @@ class OllamaClient(AIClient):
 
     def __init__(
         self,
-        model: str = "kimi-k2.5:cloud",
-        fallback_model: str = "sonnet",
-        max_retries: int = 3,
-        initial_retry_delay: float = 2.0,
+        model: str = Models.KIMI_K25_CLOUD,
+        fallback_model: str = Models.CLAUDE_SONNET,
+        max_retries: int = RetryConfig.MAX_RETRIES,
+        initial_retry_delay: float = RetryConfig.INITIAL_DELAY,
         verbose: bool = False,
     ):
         """
@@ -125,7 +127,7 @@ class OllamaClient(AIClient):
                     f"(attempt {attempt + 1}/{self.max_retries})"
                 )
                 time.sleep(delay)
-                delay *= 2
+                delay *= RetryConfig.BACKOFF_MULTIPLIER
 
         # All retries failed - try fallback
         logger.warning(f"Max retries ({self.max_retries}) exceeded — falling back to Claude")

@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
 
+from .constants import FALLBACK_MODEL, TaskTypes
+
 
 class Tier(str, Enum):
     """Quality assurance tier."""
@@ -219,6 +221,6 @@ class TaskConfig:
             description=TASK_EXPERT_DESCRIPTIONS.get(task_type, ""),
             adjudicator_role=TASK_ADJUDICATOR_ROLES.get(task_type, ""),
             output_format=TASK_OUTPUT_FORMATS.get(task_type, ""),
-            default_model=DEFAULT_MODELS.get(task_type, "kimi-k2.5:cloud"),
-            always_deep=task_type in ["audit", "architecture", "migrate"],
+            default_model=DEFAULT_MODELS.get(task_type, FALLBACK_MODEL),
+            always_deep=task_type in TaskTypes.ALWAYS_DEEP,
         )
