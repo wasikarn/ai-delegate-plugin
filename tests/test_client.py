@@ -456,3 +456,127 @@ class TestCreateClient:
         assert client.model == "test-model"
         assert client.verbose is True
         assert client.strict_validation is True
+
+
+# =============================================================================
+# Task 3: stdin fix, codex/gemini runners, error classification
+# =============================================================================
+
+class TestCLIExecutorStdin:
+    @patch("ai_delegate.client.subprocess.run")
+    def test_execute_passes_input_to_subprocess(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
+        executor = CLIExecutor()
+        executor.execute(["ollama", "run", "model"], input="my prompt\n")
+        _, kwargs = mock_run.call_args
+        assert kwargs.get("input") == "my prompt\n"
+
+    @patch("ai_delegate.client.subprocess.run")
+    def test_execute_without_input_passes_none(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
+        executor = CLIExecutor()
+        executor.execute(["echo", "hello"])
+        _, kwargs = mock_run.call_args
+        assert kwargs.get("input") is None
+
+
+class TestRunOllamaStdinFix:
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_ollama_uses_stdin_not_arg(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
+        client = OllamaClient(model="glm-5:cloud")
+        client.run("my prompt", json_output=False)
+        call_args = mock_run.call_args
+        cmd = call_args[0][0]
+        assert "my prompt" not in cmd
+        assert call_args[1].get("input") is not None
+
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_ollama_json_format_uses_two_args(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
+        client = OllamaClient(model="glm-5:cloud")
+        client.run("my prompt", json_output=True)
+        cmd = mock_run.call_args[0][0]
+        assert "--format" in cmd
+        fmt_idx = cmd.index("--format")
+        assert cmd[fmt_idx + 1] == "json"
+
+
+class TestRunCodex:
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_run_codex_uses_exec_full_auto(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="analysis result", stderr="")
+        client = OllamaClient(model="glm-5:cloud", cli_type="codex")
+        client.run("analyze this", json_output=False)
+        cmd = mock_run.call_args[0][0]
+        assert "codex" in cmd
+        assert "exec" in cmd
+        assert "--full-auto" in cmd
+
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_run_codex_passes_prompt_via_stdin(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
+        client = OllamaClient(model="o3-mini", cli_type="codex")
+        client.run("my prompt", json_output=False)
+        assert mock_run.call_args[1].get("input") == "my prompt"
+
+
+class TestRunGemini:
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_run_gemini_uses_yolo_flag(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
+        client = OllamaClient(model="gemini-2.0-flash", cli_type="gemini")
+        client.run("analyze", json_output=False)
+        cmd = mock_run.call_args[0][0]
+        assert "gemini" in cmd
+        assert "--yolo" in cmd
+
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_run_gemini_uses_p_flag(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
+        client = OllamaClient(model="gemini-2.0-flash", cli_type="gemini")
+        client.run("my prompt", json_output=False)
+        cmd = mock_run.call_args[0][0]
+        assert "-p" in cmd
+        p_idx = cmd.index("-p")
+        assert cmd[p_idx + 1] == "my prompt"
+
+
+class TestErrorClassification:
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_on_cli_error_called_on_rate_limit(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=1, stdout="", stderr="429 rate limit exceeded"
+        )
+        error_calls = []
+        client = OllamaClient(
+            model="glm-5:cloud",
+            max_retries=1,
+            on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),
+        )
+        with pytest.raises(Exception):
+            client.run("prompt")
+        assert any(etype == "rate_limit" for _, etype in error_calls)
+
+    @patch("ai_delegate.client.subprocess.run")
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_on_cli_error_called_on_auth_error(self, mock_which, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=1, stdout="", stderr="401 unauthorized"
+        )
+        error_calls = []
+        client = OllamaClient(
+            model="glm-5:cloud",
+            max_retries=1,
+            on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),
+        )
+        with pytest.raises(Exception):
+            client.run("prompt")
+        assert any(etype == "auth" for _, etype in error_calls)

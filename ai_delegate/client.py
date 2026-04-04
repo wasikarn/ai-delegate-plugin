@@ -70,6 +70,7 @@ class CLIExecutor:
         self,
         cmd: List[str],
         timeout: int = RetryConfig.API_TIMEOUT,
+        input: Optional[str] = None,
     ) -> str:
         """
         Execute command and return stdout.
@@ -77,6 +78,7 @@ class CLIExecutor:
         Args:
             cmd: Command and arguments as list
             timeout: Timeout in seconds
+            input: Optional stdin input string
 
         Returns:
             stdout from command
@@ -90,6 +92,7 @@ class CLIExecutor:
         try:
             result = subprocess.run(
                 cmd,
+                input=input,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -258,6 +261,26 @@ class ResponseParser:
 
 
 # =============================================================================
+# Error Classification
+# =============================================================================
+
+def _classify_cli_error(error_text: str) -> Optional[str]:
+    """Classify CLI error for health monitoring.
+
+    Returns:
+        'rate_limit', 'auth', 'network', or None if unclassified.
+    """
+    text = error_text.lower()
+    if any(s in text for s in ["429", "rate limit", "too many requests", "usage limit"]):
+        return "rate_limit"
+    if any(s in text for s in ["401", "unauthorized", "authentication", "forbidden"]):
+        return "auth"
+    if any(s in text for s in ["econnrefused", "timeout", "network", "connection refused"]):
+        return "network"
+    return None
+
+
+# =============================================================================
 # Main Client (Composed)
 # =============================================================================
 
@@ -280,6 +303,8 @@ class OllamaClient(AIClient):
         initial_retry_delay: float = RetryConfig.INITIAL_DELAY,
         verbose: bool = False,
         strict_validation: bool = False,
+        cli_type: str = "ollama",
+        on_cli_error: Optional[Callable[[str, str], None]] = None,
         # Dependency injection for testing
         executor: Optional[CLIExecutor] = None,
         rate_limiter: Optional[RateLimiter] = None,
@@ -314,6 +339,8 @@ class OllamaClient(AIClient):
         self.fallback_model = fallback_model
         self.verbose = verbose
         self.strict_validation = strict_validation
+        self.cli_type = cli_type
+        self.on_cli_error = on_cli_error
 
         # Inject or create components
         self.executor = executor or CLIExecutor(verbose=verbose)
@@ -364,34 +391,76 @@ class OllamaClient(AIClient):
         if validation_result.warning:
             logger.warning(f"Prompt validation warning: {validation_result.warning}")
 
-        try:
-            return self.rate_limiter.execute_with_retry(
-                operation=lambda: self._run_ollama(effective_prompt, json_output),
-                on_rate_limit=lambda e: logger.warning(
-                    f"Rate limited, falling back..." if e.permanent else f"Retrying..."
-                ),
+        if self.cli_type == "codex":
+            return self._run_with_error_handling(
+                lambda: self._run_codex(effective_prompt), "codex"
             )
-        except RateLimitError:
-            # All retries failed - try fallback
-            logger.warning(f"Max retries exceeded — falling back to Claude")
-            return self._run_fallback(effective_prompt)
+        elif self.cli_type == "gemini":
+            return self._run_with_error_handling(
+                lambda: self._run_gemini(effective_prompt, json_output), "gemini"
+            )
+        elif self.cli_type == "claude":
+            return self._run_with_error_handling(
+                lambda: self._run_fallback(effective_prompt), "claude"
+            )
+        else:  # ollama (default)
+            try:
+                return self.rate_limiter.execute_with_retry(
+                    operation=lambda: self._run_ollama(effective_prompt, json_output),
+                    on_rate_limit=lambda e: logger.warning(
+                        "Rate limited, falling back..." if e.permanent else "Retrying..."
+                    ),
+                )
+            except RateLimitError:
+                logger.warning("Max retries exceeded — falling back to Claude")
+                return self._run_fallback(effective_prompt)
+
+    def _run_with_error_handling(self, fn: Callable[[], str], cli_name: str) -> str:
+        """Run fn, classify errors, and invoke on_cli_error callback if set."""
+        try:
+            return fn()
+        except RuntimeError as e:
+            error_type = _classify_cli_error(str(e))
+            if error_type and self.on_cli_error:
+                self.on_cli_error(cli_name, error_type)
+            raise
 
     def _run_ollama(self, prompt: str, json_output: bool) -> str:
-        """Execute Ollama command."""
-        cmd = ["ollama", "run", self.model]
+        """Execute Ollama command via stdin (not prompt-as-arg)."""
+        cmd = ["ollama", "run", self.model, "--nowordwrap"]
         if json_output:
-            cmd.append("--format")
-        cmd.append(prompt)
+            cmd.extend(["--format", "json"])
 
         try:
-            output = self.executor.execute(cmd)
+            output = self.executor.execute(cmd, input=prompt + "\n")
+            rate_limit_error = self.rate_limiter.detect_rate_limit(output)
+            if rate_limit_error:
+                raise rate_limit_error
             return self.output_processor.process(output)
         except RuntimeError as e:
-            # Check for rate limit
+            error_type = _classify_cli_error(str(e))
+            if error_type and self.on_cli_error:
+                self.on_cli_error("ollama", error_type)
             rate_limit_error = self.rate_limiter.detect_rate_limit(str(e))
             if rate_limit_error:
                 raise rate_limit_error
             raise
+
+    def _run_codex(self, prompt: str) -> str:
+        """Execute Codex CLI non-interactively via stdin."""
+        model = self.model if self.model in ("o3-mini", "gpt-4o") else "o3-mini"
+        cmd = ["codex", "exec", "--full-auto", "-m", model]
+        output = self.executor.execute(cmd, input=prompt)
+        return self.output_processor.process(output)
+
+    def _run_gemini(self, prompt: str, json_output: bool) -> str:
+        """Execute Gemini CLI non-interactively."""
+        model = self.model if "gemini" in self.model else "gemini-2.0-flash"
+        cmd = ["gemini", "-p", prompt, "-m", model, "--yolo"]
+        if json_output:
+            cmd.extend(["-o", "json"])
+        output = self.executor.execute(cmd)
+        return self.output_processor.process(output)
 
     def _run_fallback(self, prompt: str) -> str:
         """Run fallback using Claude CLI."""
