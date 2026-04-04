@@ -167,7 +167,7 @@ class OllamaClient(AIClient):
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,  # 5 minute timeout
+                timeout=RetryConfig.API_TIMEOUT,
             )
 
             if result.returncode != 0:
@@ -218,7 +218,7 @@ class OllamaClient(AIClient):
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=RetryConfig.API_TIMEOUT,
             )
 
             if result.returncode != 0:
@@ -227,7 +227,7 @@ class OllamaClient(AIClient):
             return result.stdout
 
         except subprocess.TimeoutExpired:
-            raise RuntimeError("Claude fallback timed out after 5 minutes")
+            raise RuntimeError(f"Claude fallback timed out after {RetryConfig.API_TIMEOUT}s")
 
     def _is_rate_limited(self, output: str) -> bool:
         """Check if output indicates rate limit."""

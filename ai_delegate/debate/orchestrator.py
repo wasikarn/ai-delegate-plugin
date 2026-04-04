@@ -23,7 +23,7 @@ from ..config import (
     CONSENSUS_THRESHOLD_FAST,
     CONSENSUS_THRESHOLD_STANDARD,
 )
-from ..constants import WorkerConstants
+from ..constants import WorkerConstants, QualityThresholds
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class ConsensusCalculator:
             finding_by_key[key].append(finding)
 
         # Calculate consensus threshold (80% of experts)
-        threshold = len(expert_results) * 80 // 100
+        threshold = len(expert_results) * QualityThresholds.CONSENSUS_PERCENTAGE // 100
 
         # Categorize findings
         consensus_findings: List[Finding] = []
