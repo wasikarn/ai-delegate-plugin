@@ -169,6 +169,12 @@ Examples:
         action="store_true",
         help="Output findings organized by severity (human-readable checkpoint review)",
     )
+    parser.add_argument(
+        "--flow",
+        choices=["quick", "standard", "bmad", "enterprise"],
+        default=None,
+        help="Workflow mode preset (overrides --tier and --elicit)",
+    )
 
     args = parser.parse_args()
 
@@ -201,15 +207,24 @@ Examples:
         print(f"Model: {args.model or DEFAULT_MODELS.get(args.task_type, 'default')}")
         print("---")
 
+    # Apply flow preset (overrides --tier and --elicit)
+    tier = args.tier
+    elicit = args.elicit
+    if args.flow:
+        from .flow_config import FlowConfig
+        flow = FlowConfig.from_mode(args.flow)
+        tier = flow.tier
+        elicit = flow.elicit
+
     # Run analysis
     try:
         result = run_analysis(
             content=content,
             task_type=args.task_type,
-            tier=args.tier,
+            tier=tier,
             model=args.model,
             verbose=args.verbose,
-            elicit=args.elicit,
+            elicit=elicit,
             mode=args.mode,
         )
 
