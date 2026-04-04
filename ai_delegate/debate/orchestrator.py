@@ -408,10 +408,22 @@ Output your revised analysis as JSON."""
 
             try:
                 output = self.client.run_json(prompt)
+
+                # Parse new findings from debate output (not reusing old ones)
+                new_findings = []
+                raw_findings = output.get("findings", [])
+                if isinstance(raw_findings, list):
+                    for f in raw_findings:
+                        if isinstance(f, dict):
+                            new_findings.append(Finding.from_dict(f))
+
+                # Fall back to original findings if debate produced none
+                final_findings = new_findings if new_findings else result.findings
+
                 debate_results.append(ExpertResult(
                     expert_name=result.expert_name,
                     expert_type=result.expert_type,
-                    findings=result.findings,
+                    findings=final_findings,
                     raw_output=json.dumps(output),
                 ))
             except Exception as e:
