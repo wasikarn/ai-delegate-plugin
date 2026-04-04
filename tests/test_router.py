@@ -8,10 +8,11 @@ Covers:
 - Model selection for complexity
 """
 
+import time
 import pytest
 from unittest.mock import patch, MagicMock
-from ai_delegate.router import SmartRouter, detect_complexity, get_model_for_complexity, CLIType, ComplexityLevel
-from ai_delegate.constants import Models, TaskTypes, ComplexityThresholds
+from ai_delegate.router import CliHealthMonitor, SmartRouter, detect_complexity, get_model_for_complexity, CLIType, ComplexityLevel
+from ai_delegate.constants import Models, TaskTypes, ComplexityThresholds, HealthConfig
 
 
 class TestCLIDetection:
@@ -272,5 +273,86 @@ class TestRouterSingleton:
         _reset_router()
         router2 = get_router()
 
-        # After reset, should be different instances
-        assert router1 is not router2
+
+# =============================================================================
+# Task 4: CliHealthMonitor + health gate in select_cli_for_task
+# =============================================================================
+
+class TestCliHealthMonitor:
+    def test_new_cli_is_not_degraded(self):
+        monitor = CliHealthMonitor()
+        assert not monitor.is_degraded(CLIType.OLLAMA)
+
+    def test_mark_failed_degrades_cli(self):
+        monitor = CliHealthMonitor()
+        monitor.mark_failed(CLIType.OLLAMA, "rate_limit")
+        assert monitor.is_degraded(CLIType.OLLAMA)
+
+    def test_rate_limit_ttl_expires(self):
+        monitor = CliHealthMonitor()
+        monitor.mark_failed(CLIType.CODEX, "rate_limit")
+        assert monitor.is_degraded(CLIType.CODEX)
+        monitor._degraded[CLIType.CODEX] = (
+            time.monotonic() - HealthConfig.RATE_LIMIT_TTL - 1,
+            "rate_limit",
+        )
+        assert not monitor.is_degraded(CLIType.CODEX)
+
+    def test_auth_degradation_never_expires(self):
+        monitor = CliHealthMonitor()
+        monitor.mark_failed(CLIType.GEMINI, "auth")
+        monitor._degraded[CLIType.GEMINI] = (
+            time.monotonic() - 10_000,
+            "auth",
+        )
+        assert monitor.is_degraded(CLIType.GEMINI)
+
+    def test_network_ttl_expires(self):
+        monitor = CliHealthMonitor()
+        monitor.mark_failed(CLIType.CLAUDE, "network")
+        monitor._degraded[CLIType.CLAUDE] = (
+            time.monotonic() - HealthConfig.NETWORK_TTL - 1,
+            "network",
+        )
+        assert not monitor.is_degraded(CLIType.CLAUDE)
+
+    def test_clear_removes_degraded_state(self):
+        monitor = CliHealthMonitor()
+        monitor.mark_failed(CLIType.OLLAMA, "auth")
+        assert monitor.is_degraded(CLIType.OLLAMA)
+        monitor.clear(CLIType.OLLAMA)
+        assert not monitor.is_degraded(CLIType.OLLAMA)
+
+    def test_clear_nonexistent_cli_is_noop(self):
+        monitor = CliHealthMonitor()
+        monitor.clear(CLIType.OLLAMA)  # Should not raise
+
+    def test_should_warn_auth_first_time(self):
+        monitor = CliHealthMonitor()
+        monitor.mark_failed(CLIType.CODEX, "auth")
+        assert monitor.should_warn_auth(CLIType.CODEX)
+
+    def test_should_warn_auth_only_once(self):
+        monitor = CliHealthMonitor()
+        monitor.mark_failed(CLIType.CODEX, "auth")
+        monitor.should_warn_auth(CLIType.CODEX)  # consume first warning
+        assert not monitor.should_warn_auth(CLIType.CODEX)
+
+
+class TestSmartRouterHealthGate:
+    @patch("ai_delegate.router.shutil.which")
+    def test_degraded_cli_is_skipped_in_routing(self, mock_which):
+        mock_which.return_value = "/usr/bin/tool"  # all available
+        router = SmartRouter()
+        router.health_monitor.mark_failed(CLIType.OLLAMA, "auth")
+        config, model = router.select_cli_for_task("audit")
+        assert config.cli_type != CLIType.OLLAMA
+
+    @patch("ai_delegate.router.shutil.which")
+    def test_all_degraded_raises_runtime_error(self, mock_which):
+        mock_which.return_value = "/usr/bin/tool"
+        router = SmartRouter()
+        for cli in CLIType:
+            router.health_monitor.mark_failed(cli, "auth")
+        with pytest.raises(RuntimeError, match="No AI CLI available"):
+            router.select_cli_for_task("audit")

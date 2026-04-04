@@ -5,9 +5,10 @@ Philosophy: "Push to the right man for the right job" - Select the best availabl
 CLI and model combination for each task type.
 """
 
+import time
 import shutil
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
@@ -26,6 +27,7 @@ from .constants import (
     GLM_MODELS,
     CLI_STRENGTHS,
     FALLBACK_MODEL,
+    HealthConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,6 +195,54 @@ def get_model_for_complexity(complexity: ComplexityLevel, budget_mode: bool = Fa
     return config
 
 
+class CliHealthMonitor:
+    """In-memory CLI health tracker. Fresh per session, zero I/O on healthy runs."""
+
+    _TTL: Dict[str, float] = {
+        "rate_limit": HealthConfig.RATE_LIMIT_TTL,
+        "network":    HealthConfig.NETWORK_TTL,
+        "auth":       HealthConfig.AUTH_TTL,
+    }
+
+    def __init__(self) -> None:
+        self._degraded: Dict[CLIType, Tuple[float, str]] = {}
+        self._auth_warned: Set[CLIType] = set()
+
+    def mark_failed(self, cli: CLIType, error_type: str) -> None:
+        """Mark CLI as degraded. error_type: 'rate_limit' | 'auth' | 'network'"""
+        if isinstance(cli, str):
+            try:
+                cli = CLIType(cli)
+            except ValueError:
+                return
+        self._degraded[cli] = (time.monotonic(), error_type)
+
+    def is_degraded(self, cli: CLIType) -> bool:
+        """Returns True if CLI is within its TTL window."""
+        if cli not in self._degraded:
+            return False
+        failed_at, error_type = self._degraded[cli]
+        ttl = self._TTL.get(error_type, 60.0)
+        if ttl == float("inf"):
+            return True
+        if time.monotonic() - failed_at > ttl:
+            del self._degraded[cli]
+            return False
+        return True
+
+    def should_warn_auth(self, cli: CLIType) -> bool:
+        """Returns True once per session for auth-degraded CLIs."""
+        if cli in self._auth_warned:
+            return False
+        self._auth_warned.add(cli)
+        return True
+
+    def clear(self, cli: CLIType) -> None:
+        """Manually clear degraded state (e.g., after user fixes auth)."""
+        self._degraded.pop(cli, None)
+        self._auth_warned.discard(cli)
+
+
 class SmartRouter:
     """
     Intelligently routes tasks to the best available CLI and model.
@@ -201,6 +251,7 @@ class SmartRouter:
     def __init__(self):
         """Initialize router and detect available CLIs."""
         self._available_clis: Dict[CLIType, bool] = {}
+        self.health_monitor = CliHealthMonitor()
         self._detect_clis()
 
     def _detect_clis(self) -> None:
@@ -267,9 +318,18 @@ class SmartRouter:
         }
         priority_order = _task_priority_map.get(task_type, _default)
 
-        # Filter by availability and structured output preference
+        # Filter by availability and health gate (Step 0) and structured output preference
         for cli_type, config in priority_order:
             if not self.is_available(cli_type):
+                continue
+            # Step 0: skip degraded CLIs; warn once per session for auth errors
+            if self.health_monitor.is_degraded(cli_type):
+                failed_state = self.health_monitor._degraded.get(cli_type)
+                if failed_state and failed_state[1] == "auth":
+                    if self.health_monitor.should_warn_auth(cli_type):
+                        logger.warning(
+                            f"⚠ {cli_type.value} unavailable (auth error) — skipping"
+                        )
                 continue
 
             if prefer_structured_output and not config.structured_output:
@@ -283,9 +343,9 @@ class SmartRouter:
             logger.info(f"Selected {cli_type.value} with model {model} for task {task_type}")
             return config, model
 
-        # Fallback: use first available CLI
+        # Fallback: use first available non-degraded CLI
         for cli_type, config in priority_order:
-            if self.is_available(cli_type):
+            if self.is_available(cli_type) and not self.health_monitor.is_degraded(cli_type):
                 model = config.models.get(task_type, FALLBACK_MODEL)
                 logger.warning(f"Using fallback CLI {cli_type.value} with model {model}")
                 return config, model
