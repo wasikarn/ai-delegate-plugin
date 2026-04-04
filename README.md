@@ -91,7 +91,17 @@ Automatically selects the best available AI CLI and model for each task:
 
 ## Installation
 
-### Option 1: Claude Code Plugin Marketplace (Recommended)
+### Option 1: CLI Commands (Recommended)
+
+```bash
+# Add marketplace
+claude plugin marketplace add wasikarn/ai-delegate-plugin
+
+# Install plugin
+claude plugin install ai-delegate
+```
+
+### Option 2: Manual Settings
 
 Add to your `~/.claude/settings.json`:
 
@@ -105,11 +115,9 @@ Add to your `~/.claude/settings.json`:
 }
 ```
 
-Then restart Claude Code. The plugin will be automatically installed.
+Then restart Claude Code.
 
-### Option 2: Local Development
-
-For local development or testing:
+### Option 3: Local Development
 
 ```json
 {
@@ -380,9 +388,10 @@ from ai_delegate.constants import (
     Models,           # Model name constants
     TokenLimits,      # Token limits (2000, 4000, 8000)
     ComplexityThresholds,  # Line thresholds (100, 500)
-    QualityThresholds,    # Consensus thresholds (70, 90)
+    QualityThresholds,    # Consensus thresholds (70, 90, 80%)
     RetryConfig,      # Retry/timeout constants
-    CLIPriority,      # Fallback priority (1-6)
+    WorkerConstants,  # Worker configuration
+    CLIPriority,      # Fallback priority (1-5)
     TaskTypes,        # Task type constants
     ExpertDomains,    # Expert domain constants
     DEFAULT_MODELS,   # Task-to-model mapping
@@ -394,6 +403,7 @@ model = Models.GLM_5_CLOUD
 max_tokens = TokenLimits.MEDIUM_MAX_TOKENS  # 4000
 task = TaskTypes.AUDIT
 threshold = QualityThresholds.CONSENSUS_PERCENTAGE  # 80
+max_workers = WorkerConstants.DEFAULT_MAX_WORKERS  # 4
 ```
 
 ---
@@ -404,9 +414,11 @@ threshold = QualityThresholds.CONSENSUS_PERCENTAGE  # 80
 pytest tests/ -v --cov=ai_delegate
 ```
 
-- **164 tests**, 97% coverage
-- `test_complexity.py` - 25 tests for complexity detection
-- `test_supervisor.py` - 30 tests for Supervisor+Worker pattern
+- **210 tests**, 97% coverage
+- `test_complexity.py` - Complexity detection tests
+- `test_supervisor.py` - Supervisor+Worker pattern tests
+- `test_router.py` - Smart router and model selection tests
+- `test_client.py` - Client and fallback tests
 
 ---
 
@@ -419,36 +431,45 @@ ai-delegate-plugin/
 │   ├── cli.py                # CLI entry point
 │   ├── client.py             # AI client implementations
 │   ├── config.py             # Task configurations
-│   ├── constants.py          # Centralized constants ⭐ NEW
+│   ├── constants.py          # Centralized constants
 │   ├── models.py             # Data models
-│   ├── router.py             # Smart router (refactored)
-│   ├── supervisor.py         # Supervisor+Worker pattern ⭐ NEW
+│   ├── router.py             # Smart router
+│   ├── supervisor.py         # Supervisor+Worker pattern
 │   └── debate/
 │       └── orchestrator.py   # Debate orchestration
+├── agents/                   # Domain expert agents
+│   ├── security-expert.md
+│   ├── performance-expert.md
+│   └── architecture-expert.md
+├── commands/                 # Slash commands
+│   └── ai-delegate.md
 ├── skills/
 │   └── ai-delegate/
-│       ├── SKILL.md          # Skill definition (slimmed)
+│       ├── SKILL.md          # Skill definition
 │       └── references/       # Reference documentation
 ├── hooks/
 │   ├── hooks.json           # Hook configuration
 │   ├── detect-analysis-task.sh
 │   ├── validate-ai-command.sh
-│   ├── expert-context.sh     # Cache-friendly ⭐ UPDATED
+│   ├── expert-context.sh
 │   ├── expert-gate.sh
 │   ├── auto-audit.sh
 │   ├── analysis-summary.sh
 │   └── restore-debate-context.sh
 ├── tests/
-│   ├── test_complexity.py    # ⭐ NEW
-│   ├── test_supervisor.py    # ⭐ NEW
-│   └── ...
+│   ├── test_complexity.py
+│   ├── test_supervisor.py
+│   ├── test_router.py
+│   ├── test_client.py
+│   └── test_orchestrator.py
 ├── docs/
 │   ├── architecture-flow.md
 │   ├── research-application.md
 │   └── budget-mode.md
-├── scripts/
-│   └── create-release.sh
-├── .claudeignore             # ⭐ NEW
+├── .claudeignore
+├── CLAUDE.md                 # Claude Code instructions
+├── CONTRIBUTING.md
+├── LICENSE
 ├── CHANGELOG.md
 ├── README.md
 └── pyproject.toml

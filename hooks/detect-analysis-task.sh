@@ -16,9 +16,14 @@ if [ -z "$PROMPT" ]; then
 fi
 
 # Define keyword patterns
-SECURITY_KEYWORDS="security|vulnerability|audit|xss|sql injection|auth|owasp|cve"
-PERFORMANCE_KEYWORDS="performance|slow|optimize|bottleneck|latency|memory leak|n\+1"
-ARCHITECTURE_KEYWORDS="architecture|design pattern|solid|coupling|cohesion|refactor"
+SECURITY_KEYWORDS="security|vulnerability|audit|xss|sql injection|auth|owasp|cve|csrf|injection"
+PERFORMANCE_KEYWORDS="performance|slow|optimize|bottleneck|latency|memory leak|n\+1|query|cache"
+ARCHITECTURE_KEYWORDS="architecture|design pattern|solid|coupling|cohesion|scalability|layered"
+REFACTOR_KEYWORDS="refactor|simplify|complexity|code smell|technical debt|clean code|duplication"
+MIGRATE_KEYWORDS="migrate|upgrade|breaking change|version|dependency|api change|deprecation"
+TESTING_KEYWORDS="test|coverage|unit test|integration test|mock|assertion|test quality"
+CODE_QUALITY_KEYWORDS="code quality|maintainability|readability|code smell|naming|structure"
+DATABASE_KEYWORDS="database|schema|migration|query|index|sql|nosql|orm"
 
 # Check for keywords (case insensitive)
 CONTEXT=""
@@ -29,6 +34,16 @@ elif echo "$PROMPT" | grep -iqE "$PERFORMANCE_KEYWORDS"; then
     CONTEXT="Detected performance-related request. Consider using: ai-delegate analyze --file <path>"
 elif echo "$PROMPT" | grep -iqE "$ARCHITECTURE_KEYWORDS"; then
     CONTEXT="Detected architecture-related request. Consider using: ai-delegate architecture --file <path>"
+elif echo "$PROMPT" | grep -iqE "$REFACTOR_KEYWORDS"; then
+    CONTEXT="Detected refactoring-related request. Consider using: ai-delegate refactor --file <path>"
+elif echo "$PROMPT" | grep -iqE "$MIGRATE_KEYWORDS"; then
+    CONTEXT="Detected migration-related request. Consider using: ai-delegate migrate --file <path>"
+elif echo "$PROMPT" | grep -iqE "$TESTING_KEYWORDS"; then
+    CONTEXT="Detected testing-related request. Consider using: ai-delegate test --file <path>"
+elif echo "$PROMPT" | grep -iqE "$CODE_QUALITY_KEYWORDS"; then
+    CONTEXT="Detected code quality-related request. Consider using: ai-delegate quality --file <path>"
+elif echo "$PROMPT" | grep -iqE "$DATABASE_KEYWORDS"; then
+    CONTEXT="Detected database-related request. Consider using: ai-delegate database --file <path>"
 fi
 
 # Output context if detected

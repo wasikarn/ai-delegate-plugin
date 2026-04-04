@@ -61,6 +61,76 @@ OUTPUT FORMAT (JSON):
 
 Project context: See ${CWD}/package.json for framework details."
         ;;
+    refactor-expert)
+        CONTEXT="You are analyzing code for refactoring opportunities.
+Focus on complexity reduction, code smells, and refactoring patterns.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (refactor)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
+        ;;
+    migrate-expert)
+        CONTEXT="You are analyzing code migration risks.
+Focus on API changes, dependency updates, and breaking changes.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (migrate)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
+        ;;
+    testing-expert)
+        CONTEXT="You are analyzing test coverage and quality.
+Focus on coverage gaps, test quality, mocking patterns, and edge cases.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (testing)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
+        ;;
+    code-quality-expert)
+        CONTEXT="You are analyzing code quality and maintainability.
+Focus on code smells, readability, standards compliance, and technical debt.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (code-quality)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
+        ;;
+    database-expert)
+        CONTEXT="You are analyzing database schema, queries, and migrations.
+Focus on schema design, query optimization, index usage, and migration safety.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (database)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
+        ;;
     *)
         exit 0
         ;;

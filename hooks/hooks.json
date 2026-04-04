@@ -52,7 +52,7 @@
     ],
     "SubagentStart": [
       {
-        "matcher": "security-expert|performance-expert|architecture-expert",
+        "matcher": "security-expert|performance-expert|architecture-expert|refactor-expert|migrate-expert|testing-expert|code-quality-expert|database-expert",
         "hooks": [
           {
             "type": "command",
@@ -64,7 +64,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "security-expert|performance-expert|architecture-expert",
+        "matcher": "security-expert|performance-expert|architecture-expert|refactor-expert|migrate-expert|testing-expert|code-quality-expert|database-expert",
         "hooks": [
           {
             "type": "command",
