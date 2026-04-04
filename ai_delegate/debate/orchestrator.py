@@ -429,11 +429,10 @@ class DebatePhase:
         if not valid_results:
             return []
 
-        # Pre-build per-expert "other findings" strings once — O(n) instead of O(n^2)
-        other_findings_map = {
-            r.expert_name: build_findings(expert_results, exclude=r.expert_name)
-            for r in valid_results
-        }
+        # Build ONE shared findings string — O(n) total, O(1) lookup per expert.
+        # Each expert sees all findings including their own in "other experts" section,
+        # but their own findings are already in "Your initial findings" so LLM handles this fine.
+        all_findings_str = build_findings(expert_results)
 
         def _debate_one(result: ExpertResult) -> ExpertResult:
             prompt = f"""You are the {result.expert_name} Expert.
@@ -442,7 +441,7 @@ Your initial findings:
 {result.raw_output}
 
 Other experts' findings:
-{other_findings_map[result.expert_name]}
+{all_findings_str}
 
 Instructions:
 1. Compare your findings with other experts
