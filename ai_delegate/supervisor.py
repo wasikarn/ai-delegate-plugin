@@ -3,7 +3,7 @@ Supervisor+Worker pattern for distributed AI task execution.
 
 Research insight:
 - Supervisor (Sonnet/Opus) for planning and coordination
-- Workers (Haiku/GLM/DeepSeek) for execution
+- Workers (Haiku/GLM/Kimi) for execution
 - 98% cost reduction for delegated tasks
 """
 
@@ -86,40 +86,40 @@ DEFAULT_WORKERS = {
     ),
 }
 
-# Budget worker configurations (DeepSeek)
+# Budget worker configurations (GLM via Ollama)
 BUDGET_WORKERS = {
     WorkerType.CODE: WorkerConfig(
         worker_type=WorkerType.CODE,
-        model=Models.DEEPSEEK_CHAT,
-        cli=CLIType.DEEPSEEK,
+        model=Models.GLM_5_CLOUD,
+        cli=CLIType.OLLAMA,
         max_tokens=TokenLimits.CODE_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.SEARCH: WorkerConfig(
         worker_type=WorkerType.SEARCH,
-        model=Models.DEEPSEEK_CHAT,
-        cli=CLIType.DEEPSEEK,
+        model=Models.GLM_5_CLOUD,
+        cli=CLIType.OLLAMA,
         max_tokens=TokenLimits.SEARCH_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.REVIEW: WorkerConfig(
         worker_type=WorkerType.REVIEW,
-        model=Models.DEEPSEEK_CHAT,
-        cli=CLIType.DEEPSEEK,
+        model=Models.GLM_5_CLOUD,
+        cli=CLIType.OLLAMA,
         max_tokens=TokenLimits.REVIEW_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.DOCS: WorkerConfig(
         worker_type=WorkerType.DOCS,
-        model=Models.DEEPSEEK_CHAT,
-        cli=CLIType.DEEPSEEK,
+        model=Models.GLM_5_CLOUD,
+        cli=CLIType.OLLAMA,
         max_tokens=TokenLimits.DOCS_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.TEST: WorkerConfig(
         worker_type=WorkerType.TEST,
-        model=Models.DEEPSEEK_CHAT,
-        cli=CLIType.DEEPSEEK,
+        model=Models.GLM_5_CLOUD,
+        cli=CLIType.OLLAMA,
         max_tokens=TokenLimits.TEST_MAX_TOKENS,
         budget_mode=True,
     ),
@@ -250,7 +250,7 @@ def create_supervisor(
 
     Args:
         model: Supervisor model (sonnet/opus)
-        budget_mode: Use budget workers (DeepSeek)
+        budget_mode: Use budget workers (GLM/Kimi)
         max_workers: Maximum parallel workers
 
     Returns:

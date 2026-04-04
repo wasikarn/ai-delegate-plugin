@@ -32,10 +32,6 @@ class Models:
     GPT_4O = "gpt-4o"
     O3_MINI = "o3-mini"
 
-    # DeepSeek models
-    DEEPSEEK_CHAT = "deepseek-chat"
-    DEEPSEEK_REASONER = "deepseek-reasoner"
-
 
 # =============================================================================
 # Token Limits
@@ -116,8 +112,7 @@ class CLIPriority:
     GEMINI = 2
     CODEX = 3
     CLAUDE = 4
-    DEEPSEEK = 5
-    GLM = 6
+    GLM = 5
 
 
 # =============================================================================
@@ -237,17 +232,7 @@ CLAUDE_MODELS: Dict[str, str] = {
     TaskTypes.REVIEW: Models.CLAUDE_SONNET,
 }
 
-# DeepSeek models by task (budget)
-DEEPSEEK_MODELS: Dict[str, str] = {
-    TaskTypes.AUDIT: Models.DEEPSEEK_CHAT,
-    TaskTypes.ANALYZE: Models.DEEPSEEK_CHAT,
-    TaskTypes.ARCHITECTURE: Models.DEEPSEEK_REASONER,
-    TaskTypes.REFACTOR: Models.DEEPSEEK_CHAT,
-    TaskTypes.MIGRATE: Models.DEEPSEEK_REASONER,
-    TaskTypes.REVIEW: Models.DEEPSEEK_CHAT,
-}
-
-# GLM models by task
+# GLM models by task (budget option)
 GLM_MODELS: Dict[str, str] = {
     TaskTypes.AUDIT: Models.GLM_5_CLOUD,
     TaskTypes.ANALYZE: Models.GLM_5_CLOUD,
@@ -267,6 +252,5 @@ CLI_STRENGTHS = {
     "gemini": ["fast", "reasoning", "multimodal"],
     "codex": ["code_generation", "reasoning", "documentation"],
     "claude": ["reasoning", "structured_output", "safety"],
-    "deepseek": ["budget", "fast", "reasoning"],
     "glm": ["chinese_market", "structured_output", "cloud"],
 }

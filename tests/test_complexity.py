@@ -122,23 +122,23 @@ class TestGetModelForComplexity:
     # --- Budget mode ---
 
     def test_low_complexity_budget_mode(self):
-        """LOW complexity with budget mode should return deepseek-chat."""
+        """LOW complexity with budget mode should return glm-5:cloud."""
         config = get_model_for_complexity(ComplexityLevel.LOW, budget_mode=True)
-        assert config["model"] == "deepseek-chat"
-        assert config["cli"] == CLIType.DEEPSEEK
+        assert config["model"] == "glm-5:cloud"
+        assert config["cli"] == CLIType.OLLAMA
         assert "Budget mode" in config["reason"]
 
     def test_medium_complexity_budget_mode(self):
-        """MEDIUM complexity with budget mode should return deepseek-chat."""
+        """MEDIUM complexity with budget mode should return glm-5:cloud."""
         config = get_model_for_complexity(ComplexityLevel.MEDIUM, budget_mode=True)
-        assert config["model"] == "deepseek-chat"
-        assert config["cli"] == CLIType.DEEPSEEK
+        assert config["model"] == "glm-5:cloud"
+        assert config["cli"] == CLIType.OLLAMA
 
     def test_high_complexity_budget_mode(self):
-        """HIGH complexity with budget mode should return deepseek-reasoner."""
+        """HIGH complexity with budget mode should return kimi-k2.5:cloud."""
         config = get_model_for_complexity(ComplexityLevel.HIGH, budget_mode=True)
-        assert config["model"] == "deepseek-reasoner"
-        assert config["cli"] == CLIType.DEEPSEEK
+        assert config["model"] == "kimi-k2.5:cloud"
+        assert config["cli"] == CLIType.OLLAMA
 
     # --- Unknown complexity ---
 

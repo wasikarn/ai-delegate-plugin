@@ -23,7 +23,6 @@ from .constants import (
     GEMINI_MODELS,
     CODEX_MODELS,
     CLAUDE_MODELS,
-    DEEPSEEK_MODELS,
     GLM_MODELS,
     CLI_STRENGTHS,
     FALLBACK_MODEL,
@@ -38,7 +37,6 @@ class CLIType(Enum):
     GEMINI = "gemini"
     CODEX = "codex"
     CLAUDE = "claude"
-    DEEPSEEK = "deepseek"
     GLM = "glm"
 
 
@@ -100,15 +98,6 @@ CLAUDE_CONFIG = CLIConfig(
     fallback_priority=CLIPriority.CLAUDE,
 )
 
-DEEPSEEK_CONFIG = CLIConfig(
-    cli_type=CLIType.DEEPSEEK,
-    cli_name="deepseek",
-    models=DEEPSEEK_MODELS,
-    strengths=CLI_STRENGTHS["deepseek"],
-    structured_output=True,
-    fallback_priority=CLIPriority.DEEPSEEK,
-)
-
 GLM_CONFIG = CLIConfig(
     cli_type=CLIType.GLM,
     cli_name="glm",
@@ -129,21 +118,21 @@ COMPLEXITY_MODEL_MAP = {
         "cli": CLIType.CLAUDE,
         "max_tokens": TokenLimits.LOW_MAX_TOKENS,
         "reason": "Simple checks, fast response",
-        "budget_model": Models.DEEPSEEK_CHAT,
+        "budget_model": Models.GLM_5_CLOUD,
     },
     ComplexityLevel.MEDIUM: {
         "model": Models.GLM_5_CLOUD,
         "cli": CLIType.OLLAMA,
         "max_tokens": TokenLimits.MEDIUM_MAX_TOKENS,
         "reason": "Standard analysis, cost-effective",
-        "budget_model": Models.DEEPSEEK_CHAT,
+        "budget_model": Models.GLM_5_CLOUD,
     },
     ComplexityLevel.HIGH: {
         "model": Models.CLAUDE_SONNET,
         "cli": CLIType.CLAUDE,
         "max_tokens": TokenLimits.HIGH_MAX_TOKENS,
         "reason": "Complex reasoning, high accuracy",
-        "budget_model": Models.DEEPSEEK_REASONER,
+        "budget_model": Models.KIMI_K25_CLOUD,
     },
 }
 
@@ -196,7 +185,7 @@ def get_model_for_complexity(complexity: ComplexityLevel, budget_mode: bool = Fa
     if budget_mode and "budget_model" in config:
         return {
             "model": config["budget_model"],
-            "cli": CLIType.DEEPSEEK,
+            "cli": CLIType.OLLAMA,  # GLM runs via Ollama
             "max_tokens": config["max_tokens"],
             "reason": f"Budget mode: {config['reason']}"
         }
@@ -221,7 +210,6 @@ class SmartRouter:
             CLIType.GEMINI: shutil.which("gemini") is not None,
             CLIType.CODEX: shutil.which("codex") is not None,
             CLIType.CLAUDE: shutil.which("claude") is not None,
-            CLIType.DEEPSEEK: shutil.which("deepseek") is not None,
             CLIType.GLM: shutil.which("glm") is not None,
         }
 
@@ -366,7 +354,6 @@ class SmartRouter:
             CLIType.GEMINI: GEMINI_CONFIG,
             CLIType.CODEX: CODEX_CONFIG,
             CLIType.CLAUDE: CLAUDE_CONFIG,
-            CLIType.DEEPSEEK: DEEPSEEK_CONFIG,
             CLIType.GLM: GLM_CONFIG,
         }
 

@@ -139,7 +139,7 @@ class TestSupervisor:
         supervisor = Supervisor(budget_mode=True)
         config = supervisor.get_worker_config(WorkerType.CODE)
         assert config.budget_mode == True
-        assert config.model == "deepseek-chat"
+        assert config.model == "glm-5:cloud"
 
     def test_delegate_success(self):
         """delegate should execute task and return result."""
@@ -262,9 +262,10 @@ class TestBudgetWorkers:
         for worker_type in WorkerType:
             assert worker_type in BUDGET_WORKERS
 
-    def test_budget_models_are_deepseek(self):
-        """Budget workers should use DeepSeek models."""
+    def test_budget_models_are_glm(self):
+        """Budget workers should use GLM models via Ollama."""
         for worker_type in WorkerType:
             config = BUDGET_WORKERS[worker_type]
-            assert "deepseek" in config.model
+            assert config.model == "glm-5:cloud"
+            assert config.cli == CLIType.OLLAMA
             assert config.budget_mode == True
