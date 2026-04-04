@@ -18,7 +18,7 @@ from .config import (
     TASK_EXPERT_DESCRIPTIONS,
     DEFAULT_MODELS,
 )
-from .validation import validate_all, validate_file_path
+from .validation import validate_file_path
 
 
 def create_task_config(task_type: str) -> TaskConfig:
@@ -106,6 +106,11 @@ Examples:
         """,
     )
 
+    parser.add_argument(
+        "--version", "-V",
+        action="version",
+        version="%(prog)s 0.0.2",
+    )
     parser.add_argument(
         "task_type",
         choices=["audit", "analyze", "architecture", "refactor", "migrate", "review"],

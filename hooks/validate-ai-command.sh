@@ -2,13 +2,12 @@
 # validate-ai-command.sh - Validate ai-delegate commands before execution
 # Blocks invalid commands and suggests corrections
 
-set -euo pipefail
-
 # Read hook input
 INPUT=$(cat)
 
-# Extract command
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null || echo "")
+# Extract command — empty for non-Bash tools (Grep, Read, etc.)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || COMMAND=""
+COMMAND="${COMMAND:-}"
 
 # Only intercept when ai-delegate is the executable being invoked
 # (starts the command or follows a shell separator), not inside strings/args

@@ -208,6 +208,7 @@ class TaskConfig:
             "architecture": "architecture",
             "refactor": "refactor",
             "migrate": "migrate",
+            "review": "review",
         }
 
         expert_type = expert_map.get(task_type)

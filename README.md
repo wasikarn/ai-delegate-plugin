@@ -2,7 +2,7 @@
 
 **Multi-agent AI delegation framework with smart CLI routing and domain expert debate system.**
 
-[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/wasikarn/ai-delegate-plugin)
+[![Version](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/wasikarn/ai-delegate-plugin)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-300%20tests-97%25%20coverage-brightgreen.svg)]()
 
@@ -157,16 +157,19 @@ ai-delegate audit --file src/auth.py
 ai-delegate analyze --file src/api.py
 
 # Architecture review
-ai-delegate architecture --file ./src/
+ai-delegate architecture --file src/architecture.md
 
-# Multi-domain code review
-ai-delegate review src/main.py -d security,performance
+# Code review
+ai-delegate review --file src/main.py
 
 # Override model
 ai-delegate audit --model gemini-2.0-flash --file src/auth.py
 
-# Budget mode (GLM/Kimi)
-ai-delegate audit --budget --file src/auth.py
+# Use deep tier explicitly
+ai-delegate audit --tier deep --file src/auth.py
+
+# Version info
+ai-delegate --version
 ```
 
 ### Python API
@@ -174,6 +177,7 @@ ai-delegate audit --budget --file src/auth.py
 ```python
 from ai_delegate import (
     SmartRouter,
+    OllamaClient,
     DebateOrchestrator,
     TaskConfig,
     detect_complexity,
@@ -198,8 +202,9 @@ router = SmartRouter()
 cli_type, model = router.select_cli_for_task("audit")
 
 # Create orchestrator with selected model
+client = OllamaClient(model=model)
 config = TaskConfig.from_task_type("audit")
-orchestrator = DebateOrchestrator(model=model, task_config=config)
+orchestrator = DebateOrchestrator(client=client, task_config=config)
 verdict = orchestrator.analyze(content, tier="auto")
 ```
 

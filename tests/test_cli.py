@@ -49,6 +49,12 @@ class TestCreateTaskConfig:
 
         assert config.task_type == "migrate"
 
+    def test_create_review_config(self):
+        """Creating review task config."""
+        config = create_task_config("review")
+
+        assert config.task_type == "review"
+
 
 class TestRunAnalysis:
     """Tests for run_analysis function."""
@@ -348,6 +354,30 @@ class TestCLIMain:
                         main()
 
                     assert exc_info.value.code == 1
+
+
+class TestCLIVersion:
+    """Tests for --version flag."""
+
+    def test_version_flag(self, capsys):
+        """--version prints version and exits 0."""
+        with patch("sys.argv", ["ai-delegate", "--version"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "0.0.2" in captured.out
+
+    def test_version_short_flag(self, capsys):
+        """-V prints version and exits 0."""
+        with patch("sys.argv", ["ai-delegate", "-V"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "0.0.2" in captured.out
 
 
 class TestMainModule:
