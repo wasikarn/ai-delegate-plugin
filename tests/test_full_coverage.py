@@ -10,7 +10,7 @@ import sys
 import logging
 
 from ai_delegate.client import OllamaClient
-from ai_delegate.debate.orchestrator import Adjudicator, DebatePhase, ConsensusCalculator
+from ai_delegate.debate.orchestrator import Adjudicator, DebatePhase, ConsensusCalculator, build_findings
 from ai_delegate.models import TaskConfig, ExpertResult
 
 
@@ -207,13 +207,12 @@ class TestOrchestratorEmptyResults:
         assert result.score == 1.0
 
     def test_adjudicator_build_findings_with_exclude(self, mock_client, task_config):
-        """Test _build_findings with exclude parameter (line 394-396)."""
-        adjudicator = Adjudicator(mock_client, task_config)
+        """Test build_findings with exclude parameter (line 394-396)."""
         results = [
             ExpertResult(expert_name="expert1", expert_type="security", findings=[], raw_output='{"findings": []}'),
             ExpertResult(expert_name="expert2", expert_type="security", findings=[], raw_output='{"findings": []}'),
         ]
-        result = adjudicator._build_findings(results, exclude="expert1")
+        result = build_findings(results, exclude="expert1")
         assert "expert1" not in result
         assert "expert2" in result
 
@@ -302,21 +301,17 @@ class TestOrchestratorLines145to147:
 
 
 class TestOrchestratorLines394to396:
-    """Test orchestrator.py lines 394-396 - _build_findings with exclude."""
+    """Test orchestrator.py lines 394-396 - build_findings with exclude."""
 
     def test_build_findings_exclude_path(self):
-        """Test _build_findings exclude parameter."""
-        mock_client = Mock(spec=OllamaClient)
-        task_config = TaskConfig.from_task_type("audit")
-        adjudicator = Adjudicator(mock_client, task_config)
-
+        """Test build_findings exclude parameter."""
         results = [
             ExpertResult(expert_name="expert1", expert_type="security", findings=[], raw_output='{"findings": []}'),
             ExpertResult(expert_name="expert2", expert_type="security", findings=[], raw_output='{"findings": []}'),
             ExpertResult(expert_name="expert3", expert_type="security", error="failed"),
         ]
 
-        result = adjudicator._build_findings(results, exclude="expert1")
+        result = build_findings(results, exclude="expert1")
         assert "expert1" not in result
         assert "expert2" in result
         assert "expert3" not in result

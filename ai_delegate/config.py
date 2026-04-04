@@ -34,6 +34,9 @@ TASK_DISPLAY_NAMES: Dict[str, str] = {
     TaskTypes.REFACTOR: "REFACTORING ANALYSIS",
     TaskTypes.MIGRATE: "MIGRATION ANALYSIS",
     TaskTypes.REVIEW: "CODE REVIEW",
+    TaskTypes.DOCS: "DOCUMENTATION REVIEW",
+    TaskTypes.TEST: "TEST COVERAGE ANALYSIS",
+    TaskTypes.EXPLAIN: "CODE EXPLANATION",
 }
 
 # =============================================================================
@@ -47,6 +50,9 @@ TASK_EXPERT_DESCRIPTIONS: Dict[str, str] = {
     TaskTypes.REFACTOR: "Simplification, Patterns, Performance",
     TaskTypes.MIGRATE: "API Compatibility, Dependencies, Testing",
     TaskTypes.REVIEW: "Multi-domain review experts",
+    TaskTypes.DOCS: "Documentation Quality, Completeness, Clarity",
+    TaskTypes.TEST: "Coverage Analysis, Edge Cases, Integration Tests",
+    TaskTypes.EXPLAIN: "Code Understanding, Logic Flow, Dependencies",
 }
 
 # =============================================================================
@@ -101,6 +107,30 @@ Your role:
 2. Identify cross-cutting concerns
 3. Prioritize by overall impact
 4. Provide comprehensive action plan""",
+
+    TaskTypes.DOCS: """Documentation Adjudicator synthesizing findings from documentation experts.
+
+Your role:
+1. Consolidate all documentation issues
+2. Identify documentation gaps
+3. Prioritize by user impact
+4. Provide documentation improvement roadmap""",
+
+    TaskTypes.TEST: """Test Adjudicator synthesizing findings from testing experts.
+
+Your role:
+1. Consolidate all testing issues
+2. Identify coverage gaps
+3. Prioritize by risk
+4. Provide testing improvement roadmap""",
+
+    TaskTypes.EXPLAIN: """Explanation Adjudicator synthesizing findings from code analysis experts.
+
+Your role:
+1. Consolidate all explanations
+2. Identify unclear areas
+3. Prioritize by complexity
+4. Provide clear comprehensive explanation""",
 }
 
 # =============================================================================
@@ -139,7 +169,23 @@ TASK_OUTPUT_FORMATS: Dict[str, str] = {
     TaskTypes.REVIEW: """- consensus_points: array of issues all experts agree on
 - conflicts: array of disagreements between experts
 - final_verdict: prioritized list of recommendations
-- action_items: specific next steps ordered by priority""",
+- action_items: specific next steps ordered by priority
+- review_score: 0-100""",
+
+    TaskTypes.DOCS: """- documentation_gaps: array of missing documentation
+- clarity_issues: array of unclear documentation
+- completeness_score: 0-100
+- improvement_recommendations: array of specific improvements""",
+
+    TaskTypes.TEST: """- coverage_gaps: array of untested code paths
+- edge_cases: array of edge cases to test
+- test_recommendations: array of test improvements
+- coverage_score: 0-100""",
+
+    TaskTypes.EXPLAIN: """- code_summary: brief summary of what code does
+- key_components: array of main components explained
+- dependencies: array of external dependencies
+- complexity_assessment: overall complexity assessment"""
 }
 
 # =============================================================================

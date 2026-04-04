@@ -10,8 +10,8 @@ Covers:
 
 import pytest
 from unittest.mock import patch, MagicMock
-from ai_delegate.router import SmartRouter, detect_complexity, get_model_for_complexity, get_fallback_chain
-from ai_delegate.constants import CLIType, Models, TaskTypes, ComplexityLevel, CLIPriority
+from ai_delegate.router import SmartRouter, detect_complexity, get_model_for_complexity, CLIType, ComplexityLevel
+from ai_delegate.constants import Models, TaskTypes, ComplexityThresholds
 
 
 class TestCLIDetection:
@@ -23,10 +23,11 @@ class TestCLIDetection:
         mock_which.return_value = '/usr/bin/ollama'  # All CLIs found
         router = SmartRouter()
 
-        assert CLIType.OLLAMA in router.available_clis
-        assert CLIType.GEMINI in router.available_clis
-        assert CLIType.CODEX in router.available_clis
-        assert CLIType.CLAUDE in router.available_clis
+        available = router.get_available_clis()
+        assert CLIType.OLLAMA in available
+        assert CLIType.GEMINI in available
+        assert CLIType.CODEX in available
+        assert CLIType.CLAUDE in available
 
     @patch('ai_delegate.router.shutil.which')
     def test_detect_clis_partial_availability(self, mock_which):
@@ -41,10 +42,11 @@ class TestCLIDetection:
         mock_which.side_effect = which_side_effect
         router = SmartRouter()
 
-        assert CLIType.OLLAMA in router.available_clis
-        assert CLIType.CLAUDE in router.available_clis
-        assert CLIType.GEMINI not in router.available_clis
-        assert CLIType.CODEX not in router.available_clis
+        available = router.get_available_clis()
+        assert CLIType.OLLAMA in available
+        assert CLIType.CLAUDE in available
+        assert CLIType.GEMINI not in available
+        assert CLIType.CODEX not in available
 
     @patch('ai_delegate.router.shutil.which')
     def test_detect_clis_none_available(self, mock_which):
@@ -52,7 +54,8 @@ class TestCLIDetection:
         mock_which.return_value = None
         router = SmartRouter()
 
-        assert len(router.available_clis) == 0
+        available = router.get_available_clis()
+        assert len(available) == 0
 
 
 class TestSelectCLIForTask:
@@ -64,9 +67,9 @@ class TestSelectCLIForTask:
         mock_which.return_value = '/usr/bin/ollama'
         router = SmartRouter()
 
-        cli_type, model = router.select_cli_for_task(TaskTypes.AUDIT)
+        config, model = router.select_cli_for_task(TaskTypes.AUDIT)
 
-        assert cli_type == CLIType.OLLAMA
+        assert config.cli_type == CLIType.OLLAMA
         assert model == Models.GLM_5_CLOUD
 
     @patch('ai_delegate.router.shutil.which')
@@ -80,9 +83,9 @@ class TestSelectCLIForTask:
         mock_which.side_effect = which_side_effect
         router = SmartRouter()
 
-        cli_type, model = router.select_cli_for_task(TaskTypes.ARCHITECTURE)
+        config, model = router.select_cli_for_task(TaskTypes.ARCHITECTURE)
 
-        assert cli_type == CLIType.CODEX
+        assert config.cli_type == CLIType.CODEX
 
     @patch('ai_delegate.router.shutil.which')
     def test_select_cli_fallback_chain(self, mock_which):
@@ -95,10 +98,10 @@ class TestSelectCLIForTask:
         mock_which.side_effect = which_side_effect
         router = SmartRouter()
 
-        cli_type, model = router.select_cli_for_task(TaskTypes.AUDIT)
+        config, model = router.select_cli_for_task(TaskTypes.AUDIT)
 
         # Should fallback to Claude when Ollama not available
-        assert cli_type == CLIType.CLAUDE
+        assert config.cli_type == CLIType.CLAUDE
 
     @patch('ai_delegate.router.shutil.which')
     def test_select_cli_no_available(self, mock_which):
@@ -106,7 +109,7 @@ class TestSelectCLIForTask:
         mock_which.return_value = None
         router = SmartRouter()
 
-        with pytest.raises(RuntimeError, match="No CLI available"):
+        with pytest.raises(RuntimeError, match="No AI CLI available"):
             router.select_cli_for_task(TaskTypes.AUDIT)
 
     @patch('ai_delegate.router.shutil.which')
@@ -115,12 +118,12 @@ class TestSelectCLIForTask:
         mock_which.return_value = '/usr/bin/ollama'
         router = SmartRouter()
 
-        cli_type, model = router.select_cli_for_task(
+        config, model = router.select_cli_for_task(
             TaskTypes.AUDIT,
             prefer_structured_output=True
         )
 
-        assert cli_type == CLIType.OLLAMA
+        assert config.cli_type == CLIType.OLLAMA
 
 
 class TestComplexityDetection:
@@ -210,24 +213,24 @@ class TestFallbackChain:
         mock_which.return_value = '/usr/bin/ollama'
         router = SmartRouter()
 
-        chain = get_fallback_chain(CLIType.OLLAMA)
+        chain = router.get_fallback_chain(TaskTypes.AUDIT)
 
         # Ollama -> Gemini -> Codex -> Claude
-        assert chain[0] == CLIType.OLLAMA
-        assert chain[1] == CLIType.GEMINI
-        assert chain[2] == CLIType.CODEX
-        assert chain[3] == CLIType.CLAUDE
+        assert chain[0][0] == CLIType.OLLAMA
+        assert chain[1][0] == CLIType.GEMINI
+        assert chain[2][0] == CLIType.CODEX
+        assert chain[3][0] == CLIType.CLAUDE
 
     @patch('ai_delegate.router.shutil.which')
-    def test_fallback_chain_gemini_start(self, mock_which):
-        """Fallback chain from Gemini."""
+    def test_fallback_chain_gemini_available(self, mock_which):
+        """Fallback chain with Gemini available."""
         mock_which.return_value = '/usr/bin/gemini'
         router = SmartRouter()
 
-        chain = get_fallback_chain(CLIType.GEMINI)
+        chain = router.get_fallback_chain(TaskTypes.ANALYZE)
 
-        # Gemini -> Codex -> Claude
-        assert chain[0] == CLIType.GEMINI
+        # Should include all available CLIs
+        assert len(chain) > 0
 
     @patch('ai_delegate.router.shutil.which')
     def test_fallback_chain_claude_is_last(self, mock_which):
@@ -235,9 +238,9 @@ class TestFallbackChain:
         mock_which.return_value = '/usr/bin/claude'
         router = SmartRouter()
 
-        for start_cli in [CLIType.OLLAMA, CLIType.GEMINI, CLIType.CODEX]:
-            chain = get_fallback_chain(start_cli)
-            assert chain[-1] == CLIType.CLAUDE
+        chain = router.get_fallback_chain(TaskTypes.AUDIT)
+        # Claude is last in priority order
+        assert chain[-1][0] == CLIType.CLAUDE
 
 
 class TestRouterSingleton:

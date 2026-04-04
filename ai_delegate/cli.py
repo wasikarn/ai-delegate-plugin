@@ -18,6 +18,7 @@ from .config import (
     TASK_EXPERT_DESCRIPTIONS,
     DEFAULT_MODELS,
 )
+from .validation import validate_all, validate_file_path
 
 
 def create_task_config(task_type: str) -> TaskConfig:
@@ -141,8 +142,10 @@ Examples:
 
     # Get content
     if args.file:
-        if not args.file.exists():
-            print(f"Error: File not found: {args.file}", file=sys.stderr)
+        # Validate file path for security
+        validation_result = validate_file_path(args.file)
+        if not validation_result.valid:
+            print(f"Error: {validation_result.error}", file=sys.stderr)
             sys.exit(1)
         content = args.file.read_text()
     else:

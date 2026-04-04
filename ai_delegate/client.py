@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 from .constants import Models, RetryConfig, TokenLimits
+from .validation import validate_prompt, validate_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ class OllamaClient(AIClient):
         max_retries: int = RetryConfig.MAX_RETRIES,
         initial_retry_delay: float = RetryConfig.INITIAL_DELAY,
         verbose: bool = False,
+        strict_validation: bool = False,
     ):
         """
         Initialize Ollama client.
@@ -72,12 +74,27 @@ class OllamaClient(AIClient):
             max_retries: Maximum retry attempts for rate limits
             initial_retry_delay: Initial delay in seconds (doubles each retry)
             verbose: Enable verbose logging
+            strict_validation: Enable strict prompt validation (reject on warnings)
         """
+        # Validate model names
+        model_result = validate_model_name(model)
+        if not model_result.valid:
+            raise ValueError(f"Invalid model name: {model_result.error}")
+        if model_result.warning:
+            logger.warning(model_result.warning)
+
+        fallback_result = validate_model_name(fallback_model)
+        if not fallback_result.valid:
+            raise ValueError(f"Invalid fallback_model name: {fallback_result.error}")
+        if fallback_result.warning:
+            logger.warning(fallback_result.warning)
+
         self.model = model
         self.fallback_model = fallback_model
         self.max_retries = max_retries
         self.initial_retry_delay = initial_retry_delay
         self.verbose = verbose
+        self.strict_validation = strict_validation
         self._check_dependencies()
 
     def _check_dependencies(self) -> None:
@@ -106,7 +123,19 @@ class OllamaClient(AIClient):
         Raises:
             RateLimitError: If rate limit persists after all retries
             RuntimeError: If command fails for other reasons
+            ValueError: If prompt validation fails in strict mode
         """
+        # Validate prompt for security
+        validation_result = validate_prompt(prompt, strict=self.strict_validation)
+        if not validation_result.valid:
+            raise ValueError(f"Invalid prompt: {validation_result.error}")
+
+        # Use sanitized prompt if available
+        effective_prompt = validation_result.sanitized if validation_result.sanitized else prompt
+
+        if validation_result.warning:
+            logger.warning(f"Prompt validation warning: {validation_result.warning}")
+
         output_arg = "--format" if json_output else ""
 
         # Try with retries
@@ -114,7 +143,7 @@ class OllamaClient(AIClient):
 
         for attempt in range(self.max_retries):
             try:
-                return self._run_ollama(prompt, self.model, output_arg)
+                return self._run_ollama(effective_prompt, self.model, output_arg)
             except RateLimitError as e:
                 if e.permanent:
                     # Usage limit - try fallback
@@ -131,7 +160,7 @@ class OllamaClient(AIClient):
 
         # All retries failed - try fallback
         logger.warning(f"Max retries ({self.max_retries}) exceeded — falling back to Claude")
-        return self._run_fallback(prompt)
+        return self._run_fallback(effective_prompt)
 
     def _run_ollama(
         self,

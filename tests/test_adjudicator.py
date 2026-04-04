@@ -10,7 +10,7 @@ from typing import Any
 
 from ai_delegate.client import OllamaClient
 from ai_delegate.models import TaskConfig, ExpertResult, Verdict, Finding, Tier
-from ai_delegate.debate.orchestrator import Adjudicator
+from ai_delegate.debate.orchestrator import Adjudicator, build_findings
 
 
 class TestAdjudicator:
@@ -147,8 +147,8 @@ class TestAdjudicator:
     def test_build_findings_includes_all_results(
         self, adjudicator: Adjudicator, debate_results: list[ExpertResult]
     ):
-        """_build_findings should include all non-error results."""
-        findings_str = adjudicator._build_findings(debate_results)
+        """build_findings should include all non-error results."""
+        findings_str = build_findings(debate_results)
 
         assert "owasp" in findings_str
         assert "auth" in findings_str
@@ -156,7 +156,7 @@ class TestAdjudicator:
     def test_build_findings_excludes_error_results(
         self, adjudicator: Adjudicator
     ):
-        """_build_findings should exclude results with errors."""
+        """build_findings should exclude results with errors."""
         results = [
             ExpertResult(
                 expert_name="owasp",
@@ -171,7 +171,7 @@ class TestAdjudicator:
             ),
         ]
 
-        findings_str = adjudicator._build_findings(results)
+        findings_str = build_findings(results)
 
         assert "owasp" in findings_str
         assert "auth" not in findings_str
@@ -179,8 +179,8 @@ class TestAdjudicator:
     def test_build_findings_with_exclude(
         self, adjudicator: Adjudicator, debate_results: list[ExpertResult]
     ):
-        """_build_findings can exclude specific expert."""
-        findings_str = adjudicator._build_findings(debate_results, exclude="owasp")
+        """build_findings can exclude specific expert."""
+        findings_str = build_findings(debate_results, exclude="owasp")
 
         assert "owasp" not in findings_str
         assert "auth" in findings_str

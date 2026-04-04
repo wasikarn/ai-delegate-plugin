@@ -7,6 +7,7 @@ Coordinates parallel expert analysis, debate rounds, and adjudication.
 import json
 import time
 import logging
+import atexit
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, ClassVar
 
@@ -224,6 +225,24 @@ Output your findings as structured JSON with:
                 expert_type=self.task_config.task_type,
                 error=str(e),
             )
+
+    @classmethod
+    def shutdown(cls) -> None:
+        """
+        Shutdown the shared thread pool.
+
+        Call this when done with all ExpertRunner instances to free resources.
+        """
+        cls._executor.shutdown(wait=True)
+
+    @classmethod
+    def _register_cleanup(cls) -> None:
+        """Register atexit handler for automatic cleanup."""
+        atexit.register(cls.shutdown)
+
+
+# Register cleanup on module import
+ExpertRunner._register_cleanup()
 
 
 class Adjudicator:
