@@ -143,6 +143,12 @@ Examples:
         help="Output format (default: json)",
     )
     parser.add_argument(
+        "--format",
+        choices=["json", "adr", "risk-matrix", "playbook", "perf-profile"],
+        default=None,
+        help="Structured output format (overrides --output)",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose logging",
@@ -207,7 +213,20 @@ Examples:
             mode=args.mode,
         )
 
-        if args.checkpoint:
+        if args.format:
+            from .output_formatter import OutputFormatter
+            from .models import Verdict, Finding as FindingModel
+            findings = [FindingModel.from_dict(f) for f in result.get("findings", [])]
+            verdict_obj = Verdict(
+                task_type=result["task_type"],
+                consensus_score=result["consensus_score"],
+                tier_used=result["tier_used"],
+                findings=findings,
+                recommendations=result.get("recommendations", []),
+                action_items=result.get("action_items", []),
+            )
+            print(OutputFormatter().format(verdict_obj, fmt=args.format))
+        elif args.checkpoint:
             from .checkpoint import CheckpointPresenter
             from .models import Verdict, Finding as FindingModel
             findings = [FindingModel.from_dict(f) for f in result.get("findings", [])]
