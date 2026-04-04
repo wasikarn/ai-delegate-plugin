@@ -175,6 +175,11 @@ Examples:
         default=None,
         help="Workflow mode preset (overrides --tier and --elicit)",
     )
+    parser.add_argument(
+        "--show-cost",
+        action="store_true",
+        help="Show estimated token usage and cost after analysis",
+    )
 
     args = parser.parse_args()
 
@@ -269,6 +274,20 @@ Examples:
                 print("\nRecommendations:")
                 for rec in result['recommendations']:
                     print(f"  - {rec}")
+
+        if args.show_cost:
+            from .cost_tracker import CostTracker
+            tracker = CostTracker()
+            # Use content length to estimate costs per expert in result
+            model = args.model or "glm-5:cloud"
+            for finding in result.get("findings", []):
+                expert = finding.get("metadata", {}).get("expert", "expert") if isinstance(finding, dict) else "expert"
+                usage = tracker.estimate_from_content(content, model=model, expert_name=expert)
+                tracker.record(usage)
+            if not result.get("findings"):
+                usage = tracker.estimate_from_content(content, model=model)
+                tracker.record(usage)
+            print("\n" + tracker.report().format_summary())
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
