@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/wasikarn/ai-delegate-plugin)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-300%20tests-97%25%20coverage-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-500%20tests-97%25%20coverage-brightgreen.svg)]()
 
 ---
 
@@ -76,6 +76,26 @@ Automatically selects the best available AI CLI and model for each task:
 - Debate findings for consensus
 - Adjudicator synthesizes final verdict
 - Quality tiers: FAST (≥90%), STANDARD (70-90%), DEEP (<70%)
+
+### 🧩 Heterogeneous Models (per-expert model selection)
+
+Assign different models to different experts for accuracy/cost balance:
+
+```python
+config = TaskConfig.from_task_type("audit", expert_models={
+    "owasp": "claude-sonnet-4-6",   # premium for critical checks
+    "auth": "kimi-k2.5:cloud",       # budget for auth checks
+})
+```
+
+### 🕸️ Sparse Topology (k-limited peer visibility)
+
+Reduce token costs in debate by limiting how many peers each expert sees:
+
+```python
+config = TaskConfig.from_task_type("audit", sparse_topology_k=2)
+# Each expert sees only 2 peers instead of all N-1 → 2-3.3× token reduction
+```
 
 ### 🪝 Hooks System
 
@@ -206,6 +226,15 @@ client = OllamaClient(model=model)
 config = TaskConfig.from_task_type("audit")
 orchestrator = DebateOrchestrator(client=client, task_config=config)
 verdict = orchestrator.analyze(content, tier="auto")
+
+# Heterogeneous models — per-expert model selection
+config = TaskConfig.from_task_type("audit", expert_models={
+    "owasp": "claude-sonnet-4-6",
+    "auth": "kimi-k2.5:cloud",
+})
+
+# Sparse topology — limit peer visibility in debate (2-3.3× token reduction)
+config = TaskConfig.from_task_type("audit", sparse_topology_k=2)
 ```
 
 ### Supervisor+Worker Pattern
@@ -416,10 +445,10 @@ max_workers = WorkerConstants.DEFAULT_MAX_WORKERS  # 4
 ## Test Coverage
 
 ```bash
-pytest tests/ -v --cov=ai_delegate
+python -m pytest tests/ -v --cov=ai_delegate
 ```
 
-- **300 tests**, 97% coverage
+- **500 tests**, 97% coverage
 - `test_complexity.py` - Complexity detection tests
 - `test_supervisor.py` - Supervisor+Worker pattern tests
 - `test_router.py` - Smart router and model selection tests

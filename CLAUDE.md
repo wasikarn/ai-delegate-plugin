@@ -85,16 +85,42 @@ from ai_delegate.constants import (
 - `ai_delegate/constants.py` - All centralized constants
 - `ai_delegate/router.py` - SmartRouter, CLI detection, model selection
 - `ai_delegate/supervisor.py` - Supervisor+Worker pattern
-- `ai_delegate/debate/orchestrator.py` - Debate orchestration
+- `ai_delegate/debate/orchestrator.py` - Debate orchestration, heterogeneous models, sparse topology
+- `ai_delegate/models.py` - TaskConfig dataclass (expert_models, sparse_topology_k)
 - `ai_delegate/client.py` - Ollama client with fallback
+
+## Debate Quality Features
+
+### Heterogeneous Models (`TaskConfig.expert_models`)
+
+Per-expert model override — different experts can use different models:
+
+```python
+config = TaskConfig.from_task_type("audit", expert_models={
+    "owasp": "claude-sonnet-4-6",   # premium for OWASP
+    "auth": "kimi-k2.5:cloud",       # budget for auth
+})
+```
+
+### Sparse Topology (`TaskConfig.sparse_topology_k`)
+
+Limit each expert to see only `k` peers' findings in debate (reduces token cost):
+
+```python
+config = TaskConfig.from_task_type("audit", sparse_topology_k=2)
+# Each expert sees 2 peers' findings instead of all N-1
+```
+
+- `None` (default) = full topology, all experts see all peers
+- `k=2` = 2-3.3× token reduction for large expert pools
 
 ## Testing
 
 ```bash
-pytest tests/ -v --cov=ai_delegate
+python -m pytest tests/ -v --cov=ai_delegate
 ```
 
-210 tests, 97% coverage.
+500 tests, 97% coverage.
 
 ## No Hardcoding Rule
 
