@@ -158,6 +158,11 @@ Examples:
         default="solo",
         help="Debate mode: solo (parallel+consensus) or party (multi-turn adversarial)",
     )
+    parser.add_argument(
+        "--checkpoint",
+        action="store_true",
+        help="Output findings organized by severity (human-readable checkpoint review)",
+    )
 
     args = parser.parse_args()
 
@@ -202,7 +207,20 @@ Examples:
             mode=args.mode,
         )
 
-        if args.output == "json":
+        if args.checkpoint:
+            from .checkpoint import CheckpointPresenter
+            from .models import Verdict, Finding as FindingModel
+            findings = [FindingModel.from_dict(f) for f in result.get("findings", [])]
+            verdict_obj = Verdict(
+                task_type=result["task_type"],
+                consensus_score=result["consensus_score"],
+                tier_used=result["tier_used"],
+                findings=findings,
+                recommendations=result.get("recommendations", []),
+                action_items=result.get("action_items", []),
+            )
+            print(CheckpointPresenter().format(verdict_obj))
+        elif args.output == "json":
             print(json.dumps(result, indent=2))
         else:
             # Text output
