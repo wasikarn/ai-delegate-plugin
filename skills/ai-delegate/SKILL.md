@@ -1,17 +1,17 @@
 ---
 name: ai-delegate
-description: Multi-agent debate system for code analysis. Domain experts analyze in parallel, debate findings, and adjudicator synthesizes final verdict. TRIGGER when you need code review, security audit, performance analysis, or architecture review.
+description: Multi-agent debate system for code analysis. Domain experts analyze in parallel, debate findings, and adjudicator synthesizes final verdict. Automatically selects best available AI CLI (Ollama, Gemini, Codex, Claude). TRIGGER when you need code review, security audit, performance analysis, or architecture review.
 license: MIT
-compatibility: Requires Python 3.10+. Uses cloud models (glm-5, kimi-k2.5, sonnet).
+compatibility: Requires Python 3.10+. Supports Ollama, Gemini CLI, Codex CLI, and Claude CLI.
 metadata:
   author: KoBig
-  version: "2.2.0"
+  version: "2.3.0"
   tests: 164 tests, 97% coverage
 ---
 
 # AI Delegation Framework
 
-Multi-agent adaptive delegation framework with domain expert debate system.
+Multi-agent adaptive delegation framework with smart CLI routing and domain expert debate system.
 
 ## Setup
 
@@ -23,18 +23,43 @@ pip install -e "${CLAUDE_PLUGIN_ROOT}" --break-system-packages
 
 Verify: `ai-delegate --version`
 
+## Smart Router
+
+**"Push to the right man for the right job"** — Automatically selects the best available CLI and model:
+
+| Available CLIs | Detection | Fallback |
+|---------------|-----------|----------|
+| Ollama | `which ollama` | Gemini |
+| Gemini | `which gemini` | Codex |
+| Codex | `which codex` | Claude |
+| Claude | `which claude` | Last resort |
+
+**Task-CLI Mapping:**
+
+| Task | Primary CLI | Model |
+|------|-------------|-------|
+| `audit` | Ollama | glm-5:cloud |
+| `analyze` | Ollama | glm-5:cloud |
+| `architecture` | Codex | o3-mini |
+| `review` | Ollama | kimi-k2.5:cloud |
+
 ## Quick Start
 
 ```bash
-ai-delegate audit --file src/auth.py           # Security audit
-ai-delegate analyze --tier deep --file src/api.py  # Performance
-ai-delegate architecture --file ./src/          # Architecture review
-ai-delegate audit --model glm-5:cloud --file src/auth.py
+# Auto-selects best available CLI
+ai-delegate audit --file src/auth.py
+ai-delegate analyze --file src/api.py
+ai-delegate architecture --file ./src/
+
+# Override model (uses detected CLI)
+ai-delegate audit --model gemini-2.0-flash --file src/auth.py
 ```
 
 ## Architecture
 
 ```
+SmartRouter (CLI selection)
+    ↓
 DebateOrchestrator (thin coordinator)
 ├── ExpertRunner        # Parallel execution (pooled threads)
 ├── ConsensusCalculator # Consensus calculation
@@ -42,7 +67,7 @@ DebateOrchestrator (thin coordinator)
 └── Adjudicator         # Verdict synthesis + judge
 ```
 
-**Patterns:** Single Responsibility, Composition, Dependency Injection, Object Pool
+**Patterns:** Strategy, Single Responsibility, Composition, Dependency Injection
 
 ## Domain Experts
 
@@ -67,28 +92,34 @@ DebateOrchestrator (thin coordinator)
 ## Python API
 
 ```python
-from ai_delegate import OllamaClient, DebateOrchestrator, TaskConfig
+from ai_delegate import SmartRouter, DebateOrchestrator, TaskConfig
 
+# Auto-select CLI and model
+router = SmartRouter()
+cli_type, model = router.select_cli_for_task("audit")
+
+# Create orchestrator with selected model
 config = TaskConfig.from_task_type("audit")
-client = OllamaClient(model=config.default_model)
-orchestrator = DebateOrchestrator(client=client, task_config=config)
+orchestrator = DebateOrchestrator(model=model, task_config=config)
 verdict = orchestrator.analyze(content, tier="auto")
 ```
 
-## Models
+## Supported CLIs
 
-| Model | Use Case |
-|-------|----------|
-| `glm-5:cloud` | Security, performance, structured output |
-| `kimi-k2.5:cloud` | Reasoning, architecture |
-| `sonnet` | Fallback |
+| CLI | Install | Models | Use Case |
+|-----|---------|--------|----------|
+| Ollama | ollama.ai | glm-5, kimi-k2.5, sonnet | Structured output, cloud |
+| Gemini | gemini CLI | gemini-2.0-flash, gemini-2.5-pro | Fast, multimodal |
+| Codex | codex CLI | gpt-4o, o3-mini | Code generation, reasoning |
+| Claude | claude CLI | sonnet, opus | Fallback, safety |
 
 ## Rate Limiting
 
-Max retries: 3 (2s → 4s → 8s). Fallback to Claude CLI on usage limit.
+Max retries: 3 (2s → 4s → 8s). Automatic fallback to next available CLI on rate limit.
 
 ## References
 
+- [Smart Router](references/smart-router.md) — CLI and model selection
 - [Architecture Details](references/architecture.md) — Structure selection logic
 - [CLI Reference](references/cli-reference.md) — Full command reference
 - [Model Guide](references/models.md) — Model selection details
