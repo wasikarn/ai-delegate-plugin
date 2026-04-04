@@ -1,13 +1,28 @@
 ---
 name: performance-expert
-description: "Performance domain expert for multi-agent debate. Analyzes algorithm complexity, database queries, caching patterns, and resource usage. Spawned by ai-delegate for performance analysis."
-tools: Read, Grep, Glob, Bash
+description: |
+  Performance domain expert for multi-agent debate. Analyzes algorithm complexity, database queries, caching patterns, and resource usage. Spawned by ai-delegate for performance analysis.
+
+  <example>
+  Context: User requests performance analysis of API endpoints
+  user: "ai-delegate analyze --file src/api.py"
+  assistant: "I'll use the performance-expert agent to analyze algorithm complexity and database queries."
+  <commentary>
+  Performance analysis triggered, spawn performance-expert for bottleneck detection.
+  </commentary>
+  </example>
+
+  <example>
+  Context: User asks about code efficiency
+  user: "Is this code performant?"
+  assistant: "I'll spawn performance-expert to analyze complexity, queries, and caching."
+  <commentary>
+  Performance analysis requested, performance-expert handles optimization domain.
+  </commentary>
+  </example>
 model: sonnet
-effort: high
 color: yellow
-memory: session
-disallowedTools: Edit, Write
-maxTurns: 10
+tools: ["Read", "Grep", "Glob", "Bash"]
 ---
 
 # Performance Expert

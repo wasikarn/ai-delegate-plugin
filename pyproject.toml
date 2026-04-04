@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-delegate"
-version = "2.1.0"
+version = "0.0.1"
 description = "Multi-agent adaptive delegation framework with domain expert debate system"
 readme = "README.md"
 license = "MIT"
@@ -34,8 +34,8 @@ dev = [
 ai-delegate = "ai_delegate.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/kobig/ai-delegate"
-Repository = "https://github.com/kobig/ai-delegate"
+Homepage = "https://github.com/wasikarn/ai-delegate-plugin"
+Repository = "https://github.com/wasikarn/ai-delegate-plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["ai_delegate"]

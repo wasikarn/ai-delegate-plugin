@@ -15,6 +15,7 @@ from ai_delegate.supervisor import (
     DEFAULT_WORKERS,
     BUDGET_WORKERS,
 )
+from ai_delegate.router import CLIType
 
 
 class TestWorkerType:
@@ -100,7 +101,7 @@ class TestSupervisor:
         """Supervisor should be created with defaults."""
         supervisor = Supervisor()
         assert supervisor.model == "sonnet"
-        assert supervisor.cli == "claude"  # type: ignore
+        assert supervisor.cli == CLIType.CLAUDE
         assert supervisor.budget_mode == False
         assert supervisor.max_workers == 4
 

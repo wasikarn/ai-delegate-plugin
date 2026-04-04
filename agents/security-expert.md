@@ -1,13 +1,28 @@
 ---
 name: security-expert
-description: "Security domain expert for multi-agent debate. Analyzes code for OWASP Top 10 vulnerabilities, authentication issues, input validation problems, and security patterns. Spawned by ai-delegate for security audits."
-tools: Read, Grep, Glob, Bash
+description: |
+  Security domain expert for multi-agent debate. Analyzes code for OWASP Top 10 vulnerabilities, authentication issues, input validation problems, and security patterns. Spawned by ai-delegate for security audits.
+
+  <example>
+  Context: User requests security audit of authentication code
+  user: "ai-delegate audit --file src/auth.py"
+  assistant: "I'll use the security-expert agent to analyze authentication vulnerabilities."
+  <commentary>
+  Security audit triggered, spawn security-expert for OWASP analysis.
+  </commentary>
+  </example>
+
+  <example>
+  Context: User asks for security review during code review
+  user: "Review this code for security issues"
+  assistant: "I'll spawn security-expert to analyze for OWASP Top 10 vulnerabilities."
+  <commentary>
+  Security analysis requested, security-expert handles OWASP domain.
+  </commentary>
+  </example>
 model: sonnet
-effort: high
 color: red
-memory: session
-disallowedTools: Edit, Write
-maxTurns: 10
+tools: ["Read", "Grep", "Glob", "Bash"]
 ---
 
 # Security Expert

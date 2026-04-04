@@ -518,10 +518,11 @@ class DebateOrchestrator:
         if self.task_config.always_deep:
             return Tier.DEEP.value
 
-        # Use consensus-based selection
-        if consensus.score >= CONSENSUS_THRESHOLD_FAST:
+        # Use consensus-based selection (score is 0-1, percentage is 0-100)
+        consensus_pct = consensus.percentage
+        if consensus_pct >= CONSENSUS_THRESHOLD_FAST:
             return Tier.FAST.value
-        elif consensus.score >= CONSENSUS_THRESHOLD_STANDARD:
+        elif consensus_pct >= CONSENSUS_THRESHOLD_STANDARD:
             return Tier.STANDARD.value
         else:
             return Tier.DEEP.value

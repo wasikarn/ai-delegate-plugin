@@ -1,13 +1,28 @@
 ---
 name: architecture-expert
-description: "Architecture domain expert for multi-agent debate. Analyzes design patterns, SOLID principles, coupling, cohesion, and scalability. Spawned by ai-delegate for architecture reviews."
-tools: Read, Grep, Glob, Bash
+description: |
+  Architecture domain expert for multi-agent debate. Analyzes design patterns, SOLID principles, coupling, cohesion, and scalability. Spawned by ai-delegate for architecture reviews.
+
+  <example>
+  Context: User requests architecture review of module structure
+  user: "ai-delegate architecture --file ./src/"
+  assistant: "I'll use the architecture-expert agent to analyze design patterns and SOLID compliance."
+  <commentary>
+  Architecture review triggered, spawn architecture-expert for design analysis.
+  </commentary>
+  </example>
+
+  <example>
+  Context: User asks about code maintainability
+  user: "Is this module well-structured?"
+  assistant: "I'll spawn architecture-expert to analyze coupling, cohesion, and patterns."
+  <commentary>
+  Architecture analysis requested, architecture-expert handles design quality.
+  </commentary>
+  </example>
 model: sonnet
-effort: high
 color: blue
-memory: session
-disallowedTools: Edit, Write
-maxTurns: 10
+tools: ["Read", "Grep", "Glob", "Bash"]
 ---
 
 # Architecture Expert

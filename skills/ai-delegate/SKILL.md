@@ -5,7 +5,7 @@ license: MIT
 compatibility: Python 3.10+. Ollama, Gemini, Codex, Claude CLI.
 metadata:
   author: KoBig
-  version: "2.4.0"
+  version: "0.0.1"
   tests: 164 tests, 97% coverage
 ---
 

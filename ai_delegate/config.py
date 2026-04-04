@@ -11,7 +11,16 @@ from .constants import (
     TaskTypes,
     ExpertDomains,
     DEFAULT_MODELS,
+    QualityThresholds,
 )
+
+# =============================================================================
+# Backward Compatibility Exports
+# =============================================================================
+
+# Re-export consensus thresholds for backward compatibility
+CONSENSUS_THRESHOLD_FAST = QualityThresholds.FAST_THRESHOLD
+CONSENSUS_THRESHOLD_STANDARD = QualityThresholds.STANDARD_THRESHOLD
 
 
 # =============================================================================
