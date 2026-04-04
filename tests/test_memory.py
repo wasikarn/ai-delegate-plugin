@@ -166,6 +166,53 @@ class TestAnalysisMemory:
         results = memory.search_findings("SQL")
         assert len(results) == 2
 
+    def test_search_findings_filter_by_severity(self, memory):
+        memory.store_findings(
+            analysis_run_id=1,
+            task_type="audit",
+            findings=[
+                {"severity": "critical", "issue": "SQL injection in login handler"},
+                {"severity": "high",     "issue": "SQL injection in search endpoint"},
+                {"severity": "medium",   "issue": "SQL query uses string format"},
+            ],
+        )
+        results = memory.search_findings("SQL", severity="critical")
+        assert len(results) == 1
+        assert results[0]["severity"] == "critical"
+
+    def test_search_findings_case_insensitive(self, memory):
+        memory.store_findings(
+            analysis_run_id=1,
+            task_type="audit",
+            findings=[{"severity": "high", "issue": "XSS vulnerability in template renderer"}],
+        )
+        results = memory.search_findings("xss")
+        assert len(results) == 1
+
+    def test_findings_stored_after_analysis(self, memory):
+        """store_findings called with correct shape produces searchable results."""
+        findings = [
+            {"severity": "high",   "issue": "Hardcoded secret in config.py"},
+            {"severity": "medium", "issue": "Weak password hashing algorithm"},
+        ]
+        memory.store_findings(analysis_run_id=None, task_type="audit", findings=findings)
+        results = memory.search_findings("secret")
+        assert len(results) == 1
+        assert "Hardcoded secret" in results[0]["issue_text"]
+
+    def test_search_findings_with_task_type_filter(self, memory):
+        memory.store_findings(
+            analysis_run_id=1, task_type="audit",
+            findings=[{"severity": "high", "issue": "SQL injection"}],
+        )
+        memory.store_findings(
+            analysis_run_id=2, task_type="analyze",
+            findings=[{"severity": "medium", "issue": "SQL query N+1 problem"}],
+        )
+        results = memory.search_findings("SQL", task_type="audit")
+        assert len(results) == 1
+        assert results[0]["task_type"] == "audit"
+
 
 class TestCliPerformanceMethods:
     """Tests for CLI performance tracking and adaptive routing."""

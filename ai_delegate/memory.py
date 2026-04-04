@@ -212,29 +212,37 @@ class AnalysisMemory:
             for r in rows
         ]
 
-    def search_findings(self, query: str, task_type: Optional[str] = None, limit: int = 20) -> List[Dict]:
+    def search_findings(
+        self,
+        query: str,
+        task_type: Optional[str] = None,
+        severity: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[Dict]:
         """Full-text search across stored findings using FTS5."""
+        conditions = ["findings_fts MATCH ?"]
+        params: List = [query]
+
+        if task_type:
+            conditions.append("f.task_type = ?")
+            params.append(task_type)
+        if severity:
+            conditions.append("f.severity = ?")
+            params.append(severity)
+
+        where = " AND ".join(conditions)
+        params.append(limit)
+
         with self._connect() as conn:
-            if task_type:
-                rows = conn.execute(
-                    """SELECT f.id, f.analysis_run_id, f.task_type, f.severity, f.issue_text, f.timestamp
-                       FROM findings_fts
-                       JOIN findings f ON findings_fts.rowid = f.id
-                       WHERE findings_fts MATCH ? AND f.task_type = ?
-                       ORDER BY rank
-                       LIMIT ?""",
-                    (query, task_type, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT f.id, f.analysis_run_id, f.task_type, f.severity, f.issue_text, f.timestamp
-                       FROM findings_fts
-                       JOIN findings f ON findings_fts.rowid = f.id
-                       WHERE findings_fts MATCH ?
-                       ORDER BY rank
-                       LIMIT ?""",
-                    (query, limit),
-                ).fetchall()
+            rows = conn.execute(
+                f"""SELECT f.id, f.analysis_run_id, f.task_type, f.severity, f.issue_text, f.timestamp
+                   FROM findings_fts
+                   JOIN findings f ON findings_fts.rowid = f.id
+                   WHERE {where}
+                   ORDER BY rank
+                   LIMIT ?""",
+                params,
+            ).fetchall()
         return [
             {"id": r[0], "analysis_run_id": r[1], "task_type": r[2],
              "severity": r[3], "issue_text": r[4], "timestamp": r[5]}
