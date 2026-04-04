@@ -1,0 +1,33 @@
+{
+  "name": "ai-delegate",
+  "metadata": {
+    "description": "Multi-agent debate system for code analysis. Domain experts analyze in parallel, debate findings, and adjudicator synthesizes final verdict."
+  },
+  "owner": {
+    "name": "kobig"
+  },
+  "plugins": [
+    {
+      "name": "ai-delegate",
+      "source": "./",
+      "description": "Multi-agent debate system for code analysis. Domain experts analyze in parallel, debate findings, and adjudicator synthesizes final verdict. Use for code review, security audit, performance analysis, or architecture review.",
+      "version": "2.2.0",
+      "author": {
+        "name": "kobig",
+        "url": "https://github.com/wasikarn"
+      },
+      "keywords": [
+        "multi-agent",
+        "debate",
+        "code-review",
+        "security-audit",
+        "performance-analysis",
+        "architecture-review"
+      ],
+      "category": "code-analysis",
+      "homepage": "https://github.com/BIG-TATHEP/ai-delegate-plugin#readme",
+      "repository": "https://github.com/BIG-TATHEP/ai-delegate-plugin",
+      "license": "MIT"
+    }
+  ]
+}
