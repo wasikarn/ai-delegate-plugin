@@ -240,18 +240,39 @@ No credit probe available — reactive only.
 
 #### Gemini
 
-**Not installed** on this machine (`which gemini` → not found). Excluded from routing until installed.
+Installed at `/opt/homebrew/bin/gemini` v0.36.0. Uses OAuth personal auth (`~/.gemini/oauth_creds.json`).
+
+```python
+# Non-interactive run
+subprocess.run(
+    ["gemini", "-p", "<prompt>", "-m", "gemini-2.0-flash", "--yolo", "-o", "json"],
+    capture_output=True, text=True, timeout=300,
+)
+# --yolo = auto-approve all actions (required for non-interactive)
+# -o json = structured JSON output
+```
+
+**Auth probe (lightweight):**
+
+```python
+result = subprocess.run(["gemini", "--version"],
+                        capture_output=True, text=True, timeout=5)
+available = result.returncode == 0
+# OAuth expiry and quota exhaustion: reactive only — detectable from run stderr
+```
+
+No `gemini whoami` or quota command available.
 
 ### Health Probe Decision Table
 
-| CLI | Auth probe | Credit probe | Server probe | Error source |
-|-----|-----------|-------------|-------------|-------------|
-| ollama | N/A (local) | N/A | `GET /api/tags` timeout=2s | `ConnectionRefused`, model missing |
-| codex | `codex login status` | ❌ reactive only | same as auth | stderr on run |
-| claude | `claude --version` | ❌ reactive only | same as auth | stderr on run |
-| gemini | not installed | — | `which gemini` | — |
+| CLI | Auth probe | Credit/quota probe | Run command | Error source |
+|-----|-----------|-------------------|------------|-------------|
+| ollama | N/A (local) | N/A | `ollama run <model>` via stdin | `GET /api/tags` fail, model missing |
+| codex | `codex login status` | ❌ reactive only | `codex exec "<p>" --full-auto` | stderr on run |
+| claude | `claude --version` | ❌ reactive only | `claude -p "<p>" --model <m>` | stderr on run |
+| gemini | `gemini --version` | ❌ reactive only | `gemini -p "<p>" -m <m> --yolo` | stderr on run |
 
-**Implication:** Only ollama supports true proactive health check. Codex and Claude require reactive error handling — this confirms Option C (Hybrid/Lazy) is the correct strategy.
+**Implication:** Only ollama supports proactive health check (HTTP API). All API-based CLIs require reactive error handling — confirms Option C (Hybrid/Lazy) is correct.
 
 ---
 
