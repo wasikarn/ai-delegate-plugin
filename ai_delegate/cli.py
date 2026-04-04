@@ -114,7 +114,7 @@ Examples:
     parser.add_argument(
         "--version", "-V",
         action="version",
-        version="%(prog)s 0.2.0",
+        version="%(prog)s 0.3.0",
     )
     parser.add_argument(
         "task_type",
