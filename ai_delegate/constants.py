@@ -52,6 +52,10 @@ class TokenLimits:
     DOCS_MAX_TOKENS = 4000
     TEST_MAX_TOKENS = 3000
 
+    # Output processing limits
+    THINKING_LINE_LIMIT = 150  # Max lines to process for thinking prefix removal
+    OUTPUT_LINE_LIMIT = 100    # Max lines in final output after filtering
+
 
 # =============================================================================
 # Complexity Thresholds

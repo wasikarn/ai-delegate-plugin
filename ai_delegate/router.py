@@ -376,6 +376,12 @@ def get_router() -> SmartRouter:
     return _router
 
 
+def _reset_router() -> None:
+    """Reset the global router instance. Used for testing."""
+    global _router
+    _router = None
+
+
 def select_cli_and_model(
     task_type: str,
     prefer_structured_output: bool = True,

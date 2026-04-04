@@ -28,6 +28,30 @@ from ..constants import WorkerConstants, QualityThresholds
 logger = logging.getLogger(__name__)
 
 
+def build_findings(
+    results: List[ExpertResult],
+    exclude: Optional[str] = None,
+) -> str:
+    """
+    Build findings string from expert results.
+
+    Args:
+        results: List of expert results
+        exclude: Optional expert name to exclude
+
+    Returns:
+        Formatted findings string
+    """
+    parts = []
+    for result in results:
+        if result.error:
+            continue
+        if exclude and result.expert_name == exclude:
+            continue
+        parts.append(f"### {result.expert_name} Expert:\n{result.raw_output}\n")
+    return "\n".join(parts)
+
+
 class ConsensusCalculator:
     """Calculate consensus between expert findings."""
 
@@ -220,7 +244,7 @@ class Adjudicator:
         Returns:
             Final verdict
         """
-        all_findings = self._build_findings(debate_results)
+        all_findings = build_findings(debate_results)
 
         prompt = f"""You are a {self.task_config.task_type} Adjudicator.
 
@@ -257,7 +281,7 @@ Output your ADJUDICATION as structured JSON with:
             Final verdict with judge confidence
         """
         # Generate second adjudication with different focus
-        all_findings = self._build_findings(debate_results)
+        all_findings = build_findings(debate_results)
 
         prompt2 = f"""You are a {self.task_config.task_type} Adjudicator with a focus on practical impact.
 
@@ -313,30 +337,6 @@ Output your evaluation as JSON:
 
         return final_verdict
 
-    def _build_findings(
-        self,
-        results: List[ExpertResult],
-        exclude: Optional[str] = None,
-    ) -> str:
-        """
-        Build findings string from expert results.
-
-        Args:
-            results: List of expert results
-            exclude: Optional expert name to exclude
-
-        Returns:
-            Formatted findings string
-        """
-        parts = []
-        for result in results:
-            if result.error:
-                continue
-            if exclude and result.expert_name == exclude:
-                continue
-            parts.append(f"### {result.expert_name} Expert:\n{result.raw_output}\n")
-        return "\n".join(parts)
-
 
 class DebatePhase:
     """Runs debate rounds between experts."""
@@ -363,7 +363,7 @@ class DebatePhase:
                 continue
 
             # Build other findings string
-            other_findings = self._build_findings(
+            other_findings = build_findings(
                 expert_results,
                 exclude=result.expert_name,
             )
@@ -397,21 +397,6 @@ Output your revised analysis as JSON."""
                 debate_results.append(result)
 
         return debate_results
-
-    def _build_findings(
-        self,
-        results: List[ExpertResult],
-        exclude: Optional[str] = None,
-    ) -> str:
-        """Build findings string from other experts."""
-        parts = []
-        for result in results:
-            if result.error:
-                continue
-            if exclude and result.expert_name == exclude:
-                continue
-            parts.append(f"### {result.expert_name} Expert:\n{result.raw_output}\n")
-        return "\n".join(parts)
 
 
 class DebateOrchestrator:

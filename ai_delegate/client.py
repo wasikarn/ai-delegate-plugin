@@ -13,7 +13,7 @@ from typing import Dict, Any, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-from .constants import Models, RetryConfig
+from .constants import Models, RetryConfig, TokenLimits
 
 logger = logging.getLogger(__name__)
 
@@ -242,13 +242,13 @@ class OllamaClient(AIClient):
     def _strip_thinking(self, output: str) -> str:
         """Strip thinking prefix from model output."""
         # Slice first for memory efficiency, then filter
-        lines = output.split("\n")[:150]  # Take extra for filtering margin
+        lines = output.split("\n")[:TokenLimits.THINKING_LINE_LIMIT]
         filtered = [
             line for line in lines
             if not line.startswith(("Thinking", "The user wants"))
             and not line.strip().startswith("Identify")
         ]
-        return "\n".join(filtered[:100])
+        return "\n".join(filtered[:TokenLimits.OUTPUT_LINE_LIMIT])
 
     def run_json(self, prompt: str) -> Dict[str, Any]:
         """
