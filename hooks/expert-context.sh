@@ -1,6 +1,7 @@
 #!/bin/bash
 # expert-context.sh - Inject context for domain expert agents
 # Provides base context and project information to experts
+# Optimized for prompt caching (static prompts, external references)
 
 set -euo pipefail
 
@@ -16,48 +17,57 @@ if [ -z "$AGENT_TYPE" ]; then
     exit 0
 fi
 
-# Build context based on agent type
-CONTEXT=""
-
+# Build context based on agent type (STATIC - cache-friendly)
 case "$AGENT_TYPE" in
     security-expert)
-        CONTEXT="You are analyzing code for security vulnerabilities. Focus on OWASP Top 10, input validation, authentication, and secret detection."
+        CONTEXT="You are analyzing code for security vulnerabilities.
+Focus on OWASP Top 10, input validation, authentication, and secret detection.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (security)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
         ;;
     performance-expert)
-        CONTEXT="You are analyzing code for performance issues. Focus on algorithm complexity, database queries, caching, and memory usage."
+        CONTEXT="You are analyzing code for performance issues.
+Focus on algorithm complexity, database queries, caching, and memory usage.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (performance)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
         ;;
     architecture-expert)
-        CONTEXT="You are analyzing code architecture. Focus on SOLID principles, design patterns, coupling, and cohesion."
+        CONTEXT="You are analyzing code architecture.
+Focus on SOLID principles, design patterns, coupling, and cohesion.
+
+OUTPUT FORMAT (JSON):
+1. summary - One-line critical finding (TOP)
+2. severity_breakdown - Quick counts {high, medium, low}
+3. top_findings - Top 3 most important findings
+4. domain - Your domain (architecture)
+5. score - Confidence score (0-100)
+6. detailed_findings - Full analysis (BOTTOM)
+
+Project context: See ${CWD}/package.json for framework details."
         ;;
     *)
         exit 0
         ;;
 esac
 
-# Get project context if available
-PROJECT_CONTEXT=""
-if [ -n "$CWD" ] && [ -d "$CWD" ]; then
-    # Detect framework
-    if [ -f "$CWD/package.json" ]; then
-        FRAMEWORK=$(grep -o '"next"\|"react"\|"vue"\|"express"' "$CWD/package.json" 2>/dev/null | head -1 | tr -d '"' || echo "")
-        if [ -n "$FRAMEWORK" ]; then
-            PROJECT_CONTEXT="Project uses $FRAMEWORK framework."
-        fi
-    elif [ -f "$CWD/requirements.txt" ]; then
-        PROJECT_CONTEXT="Project uses Python."
-    elif [ -f "$CWD/go.mod" ]; then
-        PROJECT_CONTEXT="Project uses Go."
-    fi
-fi
-
-# Combine context
-FULL_CONTEXT="$CONTEXT"
-if [ -n "$PROJECT_CONTEXT" ]; then
-    FULL_CONTEXT="$CONTEXT $PROJECT_CONTEXT"
-fi
-
-# Output context
-jq -n --arg ctx "$FULL_CONTEXT" '{
+# Output context (static prompts for better caching)
+jq -n --arg ctx "$CONTEXT" '{
     hookSpecificOutput: {
         hookEventName: "SubagentStart",
         additionalContext: $ctx

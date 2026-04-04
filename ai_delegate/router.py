@@ -20,6 +20,15 @@ class CLIType(Enum):
     GEMINI = "gemini"
     CODEX = "codex"
     CLAUDE = "claude"
+    DEEPSEEK = "deepseek"  # Budget option
+    GLM = "glm"            # Chinese market
+
+
+class ComplexityLevel(Enum):
+    """Content complexity levels for model selection."""
+    LOW = "low"        # Simple checks, <100 lines
+    MEDIUM = "medium"  # Standard analysis, <500 lines
+    HIGH = "high"      # Complex reasoning, architecture
 
 
 @dataclass
@@ -105,6 +114,127 @@ CLAUDE_CONFIG = CLIConfig(
     fallback_priority=4,       # Always last resort
 )
 
+# DeepSeek CLI (budget option - ultra low cost)
+DEEPSEEK_CONFIG = CLIConfig(
+    cli_type=CLIType.DEEPSEEK,
+    cli_name="deepseek",
+    models={
+        "audit": "deepseek-chat",       # Budget security analysis
+        "analyze": "deepseek-chat",      # Budget performance
+        "architecture": "deepseek-reasoner",  # Budget reasoning
+        "refactor": "deepseek-chat",
+        "migrate": "deepseek-reasoner",
+        "review": "deepseek-chat",
+    },
+    strengths=["budget", "fast", "reasoning"],
+    structured_output=True,
+    fallback_priority=5,  # Budget option
+)
+
+# GLM CLI (Chinese market, cost-effective)
+GLM_CONFIG = CLIConfig(
+    cli_type=CLIType.GLM,
+    cli_name="glm",
+    models={
+        "audit": "glm-5:cloud",         # Already in Ollama
+        "analyze": "glm-5:cloud",
+        "architecture": "glm-5:cloud",
+        "refactor": "glm-5:cloud",
+        "migrate": "glm-5:cloud",
+        "review": "glm-5:cloud",
+    },
+    strengths=["chinese_market", "structured_output", "cloud"],
+    structured_output=True,
+    fallback_priority=6,  # Alternative option
+)
+
+
+# =============================================================================
+# Complexity-Based Model Selection
+# =============================================================================
+
+# Model selection by complexity (50-70% cost savings)
+# Budget mode uses DeepSeek for ultra-low cost
+COMPLEXITY_MODEL_MAP = {
+    ComplexityLevel.LOW: {
+        "model": "haiku",
+        "cli": CLIType.CLAUDE,
+        "max_tokens": 2000,
+        "reason": "Simple checks, fast response",
+        "budget_model": "deepseek-chat",  # Budget alternative
+    },
+    ComplexityLevel.MEDIUM: {
+        "model": "glm-5:cloud",
+        "cli": CLIType.OLLAMA,
+        "max_tokens": 4000,
+        "reason": "Standard analysis, cost-effective",
+        "budget_model": "deepseek-chat",  # Budget alternative
+    },
+    ComplexityLevel.HIGH: {
+        "model": "sonnet",
+        "cli": CLIType.CLAUDE,
+        "max_tokens": 8000,
+        "reason": "Complex reasoning, high accuracy",
+        "budget_model": "deepseek-reasoner",  # Budget alternative
+    },
+}
+
+
+def detect_complexity(content: str, task_type: str) -> ComplexityLevel:
+    """
+    Detect content complexity for model selection.
+
+    Args:
+        content: Code content to analyze
+        task_type: Task type (audit, analyze, etc.)
+
+    Returns:
+        ComplexityLevel for model selection
+    """
+    if not content:
+        return ComplexityLevel.LOW
+
+    lines = content.count('\n') + 1
+
+    # Architecture always needs high complexity
+    if task_type == "architecture":
+        return ComplexityLevel.HIGH
+
+    # Simple single-file checks
+    if lines < 100 and task_type in ["audit"]:
+        return ComplexityLevel.LOW
+
+    # Medium complexity
+    if lines < 500:
+        return ComplexityLevel.MEDIUM
+
+    # Complex
+    return ComplexityLevel.HIGH
+
+
+def get_model_for_complexity(complexity: ComplexityLevel, budget_mode: bool = False) -> Dict:
+    """
+    Get model config for complexity level.
+
+    Args:
+        complexity: Detected complexity level
+        budget_mode: Use budget models (DeepSeek) for cost savings
+
+    Returns:
+        Dict with model, cli, max_tokens, reason
+    """
+    config = COMPLEXITY_MODEL_MAP.get(complexity, COMPLEXITY_MODEL_MAP[ComplexityLevel.MEDIUM])
+
+    if budget_mode and "budget_model" in config:
+        return {
+            "model": config["budget_model"],
+            "cli": CLIType.DEEPSEEK,
+            "max_tokens": config["max_tokens"],
+            "reason": f"Budget mode: {config['reason']}"
+        }
+
+    return config
+
 
 class SmartRouter:
     """
@@ -129,6 +259,8 @@ class SmartRouter:
             CLIType.GEMINI: shutil.which("gemini") is not None,
             CLIType.CODEX: shutil.which("codex") is not None,
             CLIType.CLAUDE: shutil.which("claude") is not None,
+            CLIType.DEEPSEEK: shutil.which("deepseek") is not None,
+            CLIType.GLM: shutil.which("glm") is not None,
         }
 
         available = [cli.value for cli, avail in self._available_clis.items() if avail]

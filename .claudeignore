@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.Python/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Generated files
+*.generated.*
+*.min.js
+*.min.css
+
+# Test fixtures
+tests/fixtures/
+**/__snapshots__/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Lock files
+package-lock.json
+poetry.lock
+Pipfile.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large docs (load on-demand)
+docs/*.md
+!docs/architecture-flow.md
+!docs/research-application.md
