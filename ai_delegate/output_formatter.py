@@ -14,19 +14,20 @@ def _severity_rank(f: Finding) -> int:
 class OutputFormatter:
     """Formats Verdict into various structured output formats."""
 
+    _FORMAT_DISPATCH = {
+        "json":         lambda self, v: json.dumps(v.to_dict(), indent=2),
+        "adr":          lambda self, v: self._format_adr(v),
+        "risk-matrix":  lambda self, v: self._format_risk_matrix(v),
+        "playbook":     lambda self, v: self._format_playbook(v),
+        "perf-profile": lambda self, v: self._format_perf_profile(v),
+    }
+
     def format(self, verdict: Verdict, fmt: str = "json") -> str:
-        if fmt == "json":
-            return json.dumps(verdict.to_dict(), indent=2)
-        elif fmt == "adr":
-            return self._format_adr(verdict)
-        elif fmt == "risk-matrix":
-            return self._format_risk_matrix(verdict)
-        elif fmt == "playbook":
-            return self._format_playbook(verdict)
-        elif fmt == "perf-profile":
-            return self._format_perf_profile(verdict)
-        else:
-            raise ValueError(f"Unknown format: {fmt}. Valid: json, adr, risk-matrix, playbook, perf-profile")
+        handler = self._FORMAT_DISPATCH.get(fmt)
+        if handler is None:
+            valid = ", ".join(self._FORMAT_DISPATCH)
+            raise ValueError(f"Unknown format: {fmt}. Valid: {valid}")
+        return handler(self, verdict)
 
     def _format_adr(self, verdict: Verdict) -> str:
         lines = [

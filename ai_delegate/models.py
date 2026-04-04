@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
 
-from .constants import FALLBACK_MODEL, TaskTypes
+from .constants import FALLBACK_MODEL, TaskTypes, QualityThresholds
 
 
 class Tier(str, Enum):
@@ -127,12 +127,15 @@ class ConsensusResult:
     @property
     def tier(self) -> str:
         """Determine tier based on consensus score."""
-        if self.score >= 0.90:
-            return Tier.FAST.value
-        elif self.score >= 0.70:
-            return Tier.STANDARD.value
-        else:
-            return Tier.DEEP.value
+        # Thresholds are 0-100 in constants; score is 0-1
+        tier_thresholds = [
+            (QualityThresholds.FAST_THRESHOLD / 100, Tier.FAST.value),
+            (QualityThresholds.STANDARD_THRESHOLD / 100, Tier.STANDARD.value),
+        ]
+        for threshold, tier_value in tier_thresholds:
+            if self.score >= threshold:
+                return tier_value
+        return Tier.DEEP.value
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
