@@ -308,6 +308,11 @@ Output your findings as structured JSON with:
         cls._executor.shutdown(wait=True)
 
     @classmethod
+    def get_executor(cls) -> ThreadPoolExecutor:
+        """Get the shared thread pool for external use (e.g. DebatePhase)."""
+        return cls._executor
+
+    @classmethod
     def _register_cleanup(cls) -> None:
         """Register atexit handler for automatic cleanup."""
         atexit.register(cls.shutdown)
@@ -530,7 +535,7 @@ Output your revised analysis as JSON."""
 
         debate_results: List[ExpertResult] = []
         futures = {
-            ExpertRunner._executor.submit(_debate_one, result): result.expert_name
+            ExpertRunner.get_executor().submit(_debate_one, result): result.expert_name
             for result in valid_results
         }
 

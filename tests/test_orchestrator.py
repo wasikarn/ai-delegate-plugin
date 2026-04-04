@@ -649,3 +649,17 @@ class TestSparseTopology:
         for prompt in prompts_seen:
             count = prompt.count("### ")
             assert count == 1, f"Expected 1 peer section (k=1), got {count}"
+
+
+class TestExpertRunner:
+    """Tests for ExpertRunner public API."""
+
+    def test_get_executor_returns_thread_pool(self):
+        """get_executor() should return the shared ThreadPoolExecutor."""
+        from concurrent.futures import ThreadPoolExecutor
+        executor = ExpertRunner.get_executor()
+        assert isinstance(executor, ThreadPoolExecutor)
+
+    def test_get_executor_returns_same_instance(self):
+        """get_executor() should return the same instance every time."""
+        assert ExpertRunner.get_executor() is ExpertRunner.get_executor()
