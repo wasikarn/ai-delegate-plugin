@@ -385,3 +385,56 @@ class TestFindingNormalization:
         consensus = ConsensusCalculator.calculate(results)
         # "high|SQL injection" appears 2/3 (not consensus), "critical|SQL injection" appears 1/3
         assert len(consensus.consensus_findings) == 0
+
+
+class TestDisagreementSummary:
+    """Tests for disagreement_summary field (P3-T3)."""
+
+    def test_no_disagreement_when_all_agree(self):
+        results = [
+            ExpertResult("A", "audit", findings=[Finding(severity="high", issue="XSS")]),
+            ExpertResult("B", "audit", findings=[Finding(severity="high", issue="XSS")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        assert consensus.disagreement_summary == ""
+
+    def test_disagreement_summary_includes_disputed(self):
+        results = [
+            ExpertResult("A", "audit", findings=[Finding(severity="high", issue="XSS"), Finding(severity="medium", issue="CSRF")]),
+            ExpertResult("B", "audit", findings=[Finding(severity="high", issue="XSS"), Finding(severity="medium", issue="CSRF")]),
+            ExpertResult("C", "audit", findings=[Finding(severity="high", issue="XSS")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        # CSRF is disputed — 2/3, not reaching ceil(2.4)=3
+        assert "disputed" in consensus.disagreement_summary
+        assert "CSRF" in consensus.disagreement_summary
+
+    def test_disagreement_summary_includes_unique(self):
+        results = [
+            ExpertResult("A", "audit", findings=[
+                Finding(severity="high", issue="XSS", metadata={"expert": "A"}),
+            ]),
+            ExpertResult("B", "audit", findings=[
+                Finding(severity="high", issue="SQLi", metadata={"expert": "B"}),
+            ]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        assert "unique" in consensus.disagreement_summary
+
+    def test_to_dict_includes_disagreement_summary(self):
+        results = [
+            ExpertResult("A", "audit", findings=[Finding(severity="high", issue="XSS")]),
+            ExpertResult("B", "audit", findings=[Finding(severity="low", issue="Other")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        d = consensus.to_dict()
+        assert "disagreement_summary" in d
+        assert isinstance(d["disagreement_summary"], str)
+
+    def test_no_findings_returns_empty_summary(self):
+        results = [
+            ExpertResult("A", "audit", findings=[]),
+            ExpertResult("B", "audit", findings=[]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        assert consensus.disagreement_summary == ""

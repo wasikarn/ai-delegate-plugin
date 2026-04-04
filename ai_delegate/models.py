@@ -117,6 +117,7 @@ class ConsensusResult:
     consensus_findings: List[Finding] = field(default_factory=list)
     disputed_findings: List[Finding] = field(default_factory=list)
     unique_findings: Dict[str, List[Finding]] = field(default_factory=dict)
+    disagreement_summary: str = ""
 
     @property
     def percentage(self) -> float:
@@ -145,6 +146,7 @@ class ConsensusResult:
                 k: [f.to_dict() for f in v]
                 for k, v in self.unique_findings.items()
             },
+            "disagreement_summary": self.disagreement_summary,
         }
 
 

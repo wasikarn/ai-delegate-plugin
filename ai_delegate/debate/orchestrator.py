@@ -121,11 +121,25 @@ class ConsensusCalculator:
 
         score = consensus_count / total_unique if total_unique > 0 else 1.0
 
+        # Build disagreement summary
+        disagreement_summary = ""
+        if disputed_findings or unique_findings:
+            parts = []
+            if disputed_findings:
+                issues = ", ".join(f.issue for f in disputed_findings[:3])
+                parts.append(f"{len(disputed_findings)} disputed finding(s): {issues}")
+            if unique_findings:
+                for expert, findings in unique_findings.items():
+                    issues = ", ".join(f.issue for f in findings[:2])
+                    parts.append(f"{expert} raised {len(findings)} unique finding(s): {issues}")
+            disagreement_summary = "; ".join(parts)
+
         return ConsensusResult(
             score=score,
             consensus_findings=consensus_findings,
             disputed_findings=disputed_findings,
             unique_findings=unique_findings,
+            disagreement_summary=disagreement_summary,
         )
 
 
