@@ -94,7 +94,23 @@ class TestClientLoggingPaths:
 
 
 class TestClientRunOllamaPaths:
-    """Tests for client.py run_ollama paths."""
+    """Tests for client.py _run_ollama SDK paths."""
+
+    @pytest.fixture
+    def mock_module(self):
+        """Mock anthropic module in sys.modules."""
+        import sys
+        sdk_client = Mock()
+        sdk_client.messages.create.return_value = Mock(content=[Mock(text="output")])
+        mock_mod = Mock()
+        mock_mod.Anthropic.return_value = sdk_client
+        original = sys.modules.get("anthropic")
+        sys.modules["anthropic"] = mock_mod
+        yield sdk_client, mock_mod
+        if original is None:
+            sys.modules.pop("anthropic", None)
+        else:
+            sys.modules["anthropic"] = original
 
     @pytest.fixture
     def client(self):
@@ -102,27 +118,29 @@ class TestClientRunOllamaPaths:
             mock.return_value = "/usr/local/bin/ollama"
             return BackendClient(model="test-model")
 
-    @patch("ai_delegate.client.subprocess.run")
-    def test_run_ollama_verbose_logging(self, mock_run, client):
-        """Test verbose logging in _run_ollama (line 161)."""
-        client.verbose = True
-        mock_run.return_value = Mock(returncode=0, stdout="output", stderr="")
+    def test_run_ollama_returns_sdk_response(self, mock_module, client):
+        """_run_ollama returns text from SDK response."""
+        sdk_client, _ = mock_module
+        sdk_client.messages.create.return_value = Mock(content=[Mock(text="output")])
         result = client._run_ollama("prompt", json_output=True)
         assert result == "output"
 
-    @patch("ai_delegate.client.subprocess.run")
-    def test_run_ollama_command_failure(self, mock_run, client):
-        """Test non-rate-limit error (line 212)."""
-        mock_run.return_value = Mock(returncode=1, stdout="", stderr="model not found")
-        with pytest.raises(RuntimeError, match="Command failed"):
+    def test_run_ollama_sdk_error_raises_runtime_error(self, mock_module, client):
+        """SDK exception is wrapped in RuntimeError."""
+        sdk_client, _ = mock_module
+        sdk_client.messages.create.side_effect = Exception("model not found")
+        with pytest.raises(RuntimeError, match="Ollama SDK call failed"):
             client._run_ollama("prompt", json_output=False)
 
-    @patch("ai_delegate.client.subprocess.run")
-    def test_run_ollama_with_format_flag(self, mock_run, client):
-        """Test with format flag (line 228)."""
-        mock_run.return_value = Mock(returncode=0, stdout='{"key": "value"}', stderr="")
+    def test_run_ollama_strips_think_tags(self, mock_module, client):
+        """<think> blocks are stripped from SDK response."""
+        sdk_client, _ = mock_module
+        sdk_client.messages.create.return_value = Mock(
+            content=[Mock(text="<think>reasoning</think>{\"key\": \"value\"}")]
+        )
         result = client._run_ollama("prompt", json_output=True)
-        assert "key" in result
+        assert "<think>" not in result
+        assert '{"key": "value"}' in result
 
 
 class TestClientFallbackPaths:
@@ -260,18 +278,28 @@ class TestClientAbstractMethods:
 
 
 class TestClientCommandFailure:
-    """Test client.py line 212 - command failure path."""
+    """Test _run_ollama SDK failure path."""
 
-    def test_ollama_command_failure_with_stderr(self):
-        """Test _run_ollama with stderr in failure."""
-        with patch("ai_delegate.client.shutil.which") as mock_which:
-            mock_which.return_value = "/usr/local/bin/ollama"
-            client = BackendClient(model="test-model")
+    def test_ollama_sdk_failure_raises_runtime_error(self):
+        """SDK exception is wrapped in RuntimeError with descriptive message."""
+        import sys
+        sdk_client = Mock()
+        sdk_client.messages.create.side_effect = Exception("Error: model not found")
+        mock_mod = Mock()
+        mock_mod.Anthropic.return_value = sdk_client
+        original = sys.modules.get("anthropic")
+        sys.modules["anthropic"] = mock_mod
 
-        with patch("ai_delegate.client.subprocess.run") as mock_run:
-            mock_run.return_value = Mock(returncode=1, stdout="", stderr="Error: model not found")
-            with pytest.raises(RuntimeError, match="Command failed"):
+        try:
+            with patch("ai_delegate.client.shutil.which", return_value="/usr/local/bin/ollama"):
+                client = BackendClient(model="test-model")
+            with pytest.raises(RuntimeError, match="Ollama SDK call failed"):
                 client._run_ollama("prompt", json_output=False)
+        finally:
+            if original is None:
+                sys.modules.pop("anthropic", None)
+            else:
+                sys.modules["anthropic"] = original
 
 
 class TestOrchestratorLine81:

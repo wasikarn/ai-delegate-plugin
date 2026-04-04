@@ -22,12 +22,16 @@ classifiers = [
 keywords = ["ai", "agent", "delegation", "multi-agent", "debate"]
 
 [project.optional-dependencies]
+sdk = [
+    "anthropic>=0.30.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "pytest-cov>=4.0",
     "mypy>=1.0",
     "ruff>=0.1",
+    "anthropic>=0.30.0",
 ]
 
 [project.scripts]

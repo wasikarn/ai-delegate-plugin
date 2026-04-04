@@ -11,6 +11,7 @@ Architecture follows Single Responsibility Principle:
 - BackendClient: orchestrates components
 """
 
+import re
 import subprocess
 import json
 import time
@@ -20,7 +21,7 @@ from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-from .constants import Models, RetryConfig, TokenLimits
+from .constants import Models, RetryConfig, TimeoutConfig, TokenLimits
 from .validation import validate_prompt, validate_model_name, ValidationResult
 
 logger = logging.getLogger(__name__)
@@ -207,6 +208,10 @@ class OutputProcessor:
 
     def strip_thinking(self, output: str) -> str:
         """Strip thinking prefix from model output."""
+        # Strip <think>...</think> blocks (GLM/Kimi chain-of-thought)
+        output = re.sub(r"<think>.*?</think>", "", output, flags=re.DOTALL).strip()
+        # Strip ANSI escape codes
+        output = re.sub(r"\x1b\[[0-9;]*[mGKHF]", "", output)
         lines = output.split("\n")[:self.thinking_limit]
         filtered = [
             line for line in lines
@@ -356,11 +361,13 @@ class BackendClient(AIClient):
 
     def _check_dependencies(self) -> None:
         """Check that required dependencies are installed."""
-        if not self.executor.check_available("ollama"):
-            raise RuntimeError(
-                "Ollama is not installed. Install from: https://ollama.ai"
-            )
-
+        if self.cli_type == "ollama":
+            # SDK path: ollama CLI not strictly required (server may run without it in PATH)
+            if not self.executor.check_available("ollama"):
+                logger.warning(
+                    "Ollama CLI not found in PATH — "
+                    "ensure ollama server is running at localhost:11434"
+                )
         self._claude_available = self.executor.check_available("claude")
         if not self._claude_available:
             logger.warning("Claude CLI not found — fallback unavailable")
@@ -426,25 +433,50 @@ class BackendClient(AIClient):
             raise
 
     def _run_ollama(self, prompt: str, json_output: bool) -> str:
-        """Execute Ollama command via stdin (not prompt-as-arg)."""
-        cmd = ["ollama", "run", self.model, "--nowordwrap"]
-        if json_output:
-            cmd.extend(["--format", "json"])
+        """Execute via Anthropic SDK targeting Ollama's API proxy (localhost:11434).
+
+        Works for all Ollama models — local (llama3.2, qwen2.5) and cloud
+        (:cloud suffix like glm-5:cloud, kimi-k2.5:cloud). SDK returns clean
+        text with no ANSI codes or subprocess piping complexity.
+        """
+        try:
+            import anthropic
+        except ImportError:
+            raise RuntimeError(
+                "anthropic SDK not installed. "
+                "Install: pip install 'ai-delegate[sdk]'"
+            )
+
+        timeout = (
+            TimeoutConfig.SDK_CLOUD if self.model.endswith(":cloud")
+            else TimeoutConfig.SDK_LOCAL
+        )
+
+        client = anthropic.Anthropic(
+            base_url="http://localhost:11434",
+            api_key="ollama",
+            timeout=timeout,
+        )
 
         try:
-            output = self.executor.execute(cmd, input=prompt + "\n")
-            rate_limit_error = self.rate_limiter.detect_rate_limit(output)
-            if rate_limit_error:
-                raise rate_limit_error
-            return self.output_processor.process(output)
-        except RuntimeError as e:
-            error_type = _classify_cli_error(str(e))
+            response = client.messages.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=TokenLimits.HIGH_MAX_TOKENS,
+            )
+            text = response.content[0].text
+            # Strip <think>...</think> blocks (GLM/Kimi reasoning prefix)
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+            return text
+        except Exception as e:
+            error_str = str(e)
+            error_type = _classify_cli_error(error_str)
             if error_type and self.on_cli_error:
                 self.on_cli_error("ollama", error_type)
-            rate_limit_error = self.rate_limiter.detect_rate_limit(str(e))
+            rate_limit_error = self.rate_limiter.detect_rate_limit(error_str)
             if rate_limit_error:
                 raise rate_limit_error
-            raise
+            raise RuntimeError(f"Ollama SDK call failed: {e}") from e
 
     def _run_codex(self, prompt: str) -> str:
         """Execute Codex CLI non-interactively via stdin."""

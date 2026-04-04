@@ -34,13 +34,16 @@ class TestMainModuleExecution:
 class TestClientInit:
     """Tests for BackendClient initialization."""
 
-    def test_init_without_ollama_raises(self):
-        """Initialization raises RuntimeError when ollama is not installed."""
+    def test_init_without_ollama_warns(self, caplog):
+        """Missing ollama CLI logs a warning (SDK path doesn't require it)."""
+        import logging
         with patch("ai_delegate.client.shutil.which") as mock_which:
             mock_which.return_value = None
 
-            with pytest.raises(RuntimeError, match="Ollama is not installed"):
-                BackendClient(model="test-model")
+            with caplog.at_level(logging.WARNING, logger="ai_delegate.client"):
+                BackendClient(model="test-model")  # should not raise
+
+        assert "localhost:11434" in caplog.text
 
     def test_init_without_claude_fallback_logs_warning(self, caplog):
         """Initialization logs warning when Claude CLI is not available."""

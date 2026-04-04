@@ -191,6 +191,39 @@ class TestOutputProcessor:
         result_lines = result.split("\n")
         assert len(result_lines) <= 100
 
+    def test_strip_thinking_removes_think_tags(self):
+        """strip_thinking removes <think>...</think> blocks."""
+        processor = OutputProcessor()
+        output = "<think>This is my reasoning</think>Actual answer"
+
+        result = processor.strip_thinking(output)
+
+        assert "<think>" not in result
+        assert "This is my reasoning" not in result
+        assert "Actual answer" in result
+
+    def test_strip_thinking_removes_multiline_think_tags(self):
+        """strip_thinking handles multiline <think> blocks."""
+        processor = OutputProcessor()
+        output = "<think>\nline1\nline2\n</think>\n{\"key\": \"value\"}"
+
+        result = processor.strip_thinking(output)
+
+        assert "<think>" not in result
+        assert "line1" not in result
+        assert '{"key": "value"}' in result
+
+    def test_strip_thinking_removes_ansi_codes(self):
+        """strip_thinking removes ANSI escape codes."""
+        processor = OutputProcessor()
+        output = "\x1b[32mGreen text\x1b[0m normal text"
+
+        result = processor.strip_thinking(output)
+
+        assert "\x1b[" not in result
+        assert "Green text" in result
+        assert "normal text" in result
+
 
 class TestResponseParser:
     """Tests for ResponseParser component."""
@@ -256,12 +289,15 @@ class TestBackendClientInit:
         assert client.model == "test-model"
 
     @patch("ai_delegate.client.shutil.which")
-    def test_init_raises_without_ollama(self, mock_which: Mock):
-        """Initialization raises RuntimeError when ollama is not installed."""
+    def test_init_warns_without_ollama_cli(self, mock_which: Mock, caplog):
+        """Missing ollama CLI is a warning (SDK path doesn't need it)."""
         mock_which.return_value = None
 
-        with pytest.raises(RuntimeError, match="Ollama is not installed"):
-            BackendClient(model="test-model")
+        import logging
+        with caplog.at_level(logging.WARNING, logger="ai_delegate.client"):
+            BackendClient(model="test-model")  # should not raise
+
+        assert "localhost:11434" in caplog.text
 
     @patch("ai_delegate.client.shutil.which")
     def test_init_warns_without_claude_fallback(self, mock_which: Mock, caplog):
@@ -296,68 +332,85 @@ class TestBackendClientInit:
         assert client.response_parser is parser
 
 
+def _make_sdk_response(text: str) -> MagicMock:
+    """Helper: build a fake anthropic SDK response."""
+    return MagicMock(content=[MagicMock(text=text)])
+
+
 class TestBackendClientRun:
-    """Tests for BackendClient.run method."""
+    """Tests for BackendClient.run method (ollama path uses Anthropic SDK)."""
 
     @pytest.fixture
-    def mock_executor(self) -> CLIExecutor:
-        """Create mock executor."""
+    def mock_executor(self) -> Mock:
+        """Create mock executor (used only for non-ollama paths and init checks)."""
         executor = Mock(spec=CLIExecutor)
         executor.execute.return_value = "Model output"
         executor.check_available.return_value = True
         return executor
 
     @pytest.fixture
-    def client(self, mock_executor: CLIExecutor) -> BackendClient:
-        """Create BackendClient with mocked executor."""
-        with patch("ai_delegate.client.shutil.which") as mock_which:
-            mock_which.return_value = "/usr/local/bin/ollama"
+    def mock_sdk(self) -> Mock:
+        """Create mock anthropic SDK client and inject into sys.modules."""
+        import sys
+        sdk_client = MagicMock()
+        sdk_client.messages.create.return_value = _make_sdk_response("Model output")
+        mock_module = MagicMock()
+        mock_module.Anthropic.return_value = sdk_client
+        # Patch anthropic in sys.modules so lazy `import anthropic` in _run_ollama picks it up
+        original = sys.modules.get("anthropic")
+        sys.modules["anthropic"] = mock_module
+        yield sdk_client
+        if original is None:
+            sys.modules.pop("anthropic", None)
+        else:
+            sys.modules["anthropic"] = original
+
+    @pytest.fixture
+    def client(self, mock_executor: Mock, mock_sdk: Mock) -> BackendClient:
+        """Create BackendClient with mocked executor and SDK."""
+        with patch("ai_delegate.client.shutil.which", return_value="/usr/local/bin/ollama"):
             return BackendClient(model="test-model", executor=mock_executor)
 
-    def test_run_returns_output(self, client: BackendClient, mock_executor: Mock):
+    def test_run_returns_output(self, client: BackendClient, mock_sdk: Mock):
         """run returns model output on success."""
-        mock_executor.execute.return_value = "Model output"
+        mock_sdk.messages.create.return_value = _make_sdk_response("Model output")
 
         result = client.run("test prompt")
 
         assert result == "Model output"
-        mock_executor.execute.assert_called_once()
 
-    def test_run_strips_thinking_prefix(self, client: BackendClient, mock_executor: Mock):
-        """run strips 'Thinking' prefix from output."""
-        mock_executor.execute.return_value = "Thinking about the problem...\nThe answer is 42"
+    def test_run_strips_thinking_prefix(self, client: BackendClient, mock_sdk: Mock):
+        """run strips <think> blocks from SDK output."""
+        mock_sdk.messages.create.return_value = _make_sdk_response(
+            "<think>Thinking about the problem...</think>\nThe answer is 42"
+        )
 
         result = client.run("test prompt")
 
         assert "Thinking" not in result
         assert "The answer is 42" in result
 
-    def test_run_retries_on_rate_limit(self, client: BackendClient, mock_executor: Mock):
-        """run retries on temporary rate limit."""
-        # First call fails, second succeeds
-        mock_executor.execute.side_effect = [
-            RuntimeError("Error: 429 Too Many Requests"),
-            "Success",
+    def test_run_retries_on_rate_limit(self, client: BackendClient, mock_sdk: Mock):
+        """run retries on temporary rate limit from SDK."""
+        mock_sdk.messages.create.side_effect = [
+            Exception("Error: 429 Too Many Requests"),
+            Exception("Error: 429 Too Many Requests"),
+            _make_sdk_response("Success"),
         ]
 
         with patch("ai_delegate.client.time.sleep"):
             result = client.run("test prompt")
 
         assert result == "Success"
-        assert mock_executor.execute.call_count == 2
 
-    def test_run_fallback_on_permanent_rate_limit(self, mock_executor: Mock):
+    def test_run_fallback_on_permanent_rate_limit(self, mock_executor: Mock, mock_sdk: Mock):
         """run falls back to Claude on permanent rate limit."""
-        mock_executor.execute.side_effect = [
-            RuntimeError("Error: usage limit exceeded"),
-            "Claude response",
-        ]
+        mock_sdk.messages.create.side_effect = Exception("Error: usage limit exceeded")
         mock_executor.check_available.return_value = True
+        mock_executor.execute.return_value = "Claude response"
 
-        with patch("ai_delegate.client.shutil.which") as mock_which:
-            mock_which.return_value = "/usr/local/bin/ollama"
+        with patch("ai_delegate.client.shutil.which", return_value="/usr/local/bin/ollama"):
             client = BackendClient(model="test-model", executor=mock_executor)
-
             result = client.run("test prompt")
 
         assert result == "Claude response"
@@ -480,28 +533,83 @@ class TestCLIExecutorStdin:
         assert kwargs.get("input") is None
 
 
-class TestRunOllamaStdinFix:
-    @patch("ai_delegate.client.subprocess.run")
-    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_ollama_uses_stdin_not_arg(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
-        client = BackendClient(model="glm-5:cloud")
-        client.run("my prompt", json_output=False)
-        call_args = mock_run.call_args
-        cmd = call_args[0][0]
-        assert "my prompt" not in cmd
-        assert call_args[1].get("input") is not None
+def _mock_anthropic(response_text: str) -> tuple:
+    """Helper: create mock anthropic module + sdk client returning response_text."""
+    sdk_client = MagicMock()
+    sdk_client.messages.create.return_value = _make_sdk_response(response_text)
+    mock_module = MagicMock()
+    mock_module.Anthropic.return_value = sdk_client
+    return mock_module, sdk_client
 
-    @patch("ai_delegate.client.subprocess.run")
+
+class TestRunOllamaSDK:
+    """Ollama path uses Anthropic SDK (not subprocess)."""
+
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_ollama_json_format_uses_two_args(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
-        client = BackendClient(model="glm-5:cloud")
-        client.run("my prompt", json_output=True)
-        cmd = mock_run.call_args[0][0]
-        assert "--format" in cmd
-        fmt_idx = cmd.index("--format")
-        assert cmd[fmt_idx + 1] == "json"
+    def test_ollama_calls_sdk_not_subprocess(self, _):
+        """Ollama path calls SDK, not subprocess."""
+        mock_module, sdk_client = _mock_anthropic('{"findings": []}')
+        sdk_client.messages.create.return_value = _make_sdk_response('{"findings": []}')
+
+        with patch.dict("sys.modules", {"anthropic": mock_module}):
+            with patch("ai_delegate.client.subprocess.run") as mock_subprocess:
+                client = BackendClient(model="glm-5:cloud")
+                client.run("my prompt", json_output=False)
+
+        mock_subprocess.assert_not_called()
+        mock_module.Anthropic.assert_called_once()
+
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_ollama_cloud_timeout_exceeds_subprocess_timeout(self, _):
+        """SDK_CLOUD timeout (180s) > SUBPROCESS timeout (60s)."""
+        from ai_delegate.constants import TimeoutConfig
+        assert TimeoutConfig.SDK_CLOUD > TimeoutConfig.SUBPROCESS
+
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_ollama_cloud_model_passes_longer_timeout(self, _):
+        """Cloud model (:cloud suffix) passes SDK_CLOUD timeout to Anthropic()."""
+        from ai_delegate.constants import TimeoutConfig
+        captured: dict = {}
+        sdk_client = MagicMock()
+        sdk_client.messages.create.return_value = _make_sdk_response("result")
+
+        def fake_anthropic(base_url, api_key, timeout):  # noqa: ARG001
+            captured["timeout"] = timeout
+            return sdk_client
+
+        mock_module = MagicMock()
+        mock_module.Anthropic.side_effect = fake_anthropic
+
+        with patch.dict("sys.modules", {"anthropic": mock_module}):
+            client = BackendClient(model="glm-5:cloud")
+            client.run("prompt")
+
+        assert captured.get("timeout") == TimeoutConfig.SDK_CLOUD
+
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_ollama_strips_think_tags(self, _):
+        """<think>...</think> blocks are stripped from SDK response."""
+        mock_module, _ = _mock_anthropic("<think>reasoning here</think>actual answer")
+
+        with patch.dict("sys.modules", {"anthropic": mock_module}):
+            client = BackendClient(model="glm-5:cloud")
+            result = client.run("my prompt")
+
+        assert "<think>" not in result
+        assert "actual answer" in result
+
+    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
+    def test_ollama_missing_anthropic_raises_runtime_error(self, _):
+        """Missing anthropic package raises RuntimeError with install instructions."""
+        import sys
+        original = sys.modules.pop("anthropic", None)
+        try:
+            client = BackendClient(model="glm-5:cloud")
+            with pytest.raises(RuntimeError, match="anthropic SDK not installed"):
+                client.run("prompt")
+        finally:
+            if original is not None:
+                sys.modules["anthropic"] = original
 
 
 class TestRunCodex:
@@ -549,34 +657,47 @@ class TestRunGemini:
 
 
 class TestErrorClassification:
-    @patch("ai_delegate.client.subprocess.run")
+    """on_cli_error callback tests for SDK-based ollama path."""
+
+    def _make_client_with_sdk_error(self, error_msg: str) -> tuple:
+        """Create client + mock SDK that raises error_msg on messages.create."""
+        sdk_client = MagicMock()
+        sdk_client.messages.create.side_effect = Exception(error_msg)
+        mock_module = MagicMock()
+        mock_module.Anthropic.return_value = sdk_client
+        return mock_module, sdk_client
+
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_on_cli_error_called_on_rate_limit(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=1, stdout="", stderr="429 rate limit exceeded"
-        )
-        error_calls = []
-        client = BackendClient(
-            model="glm-5:cloud",
-            max_retries=1,
-            on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),
-        )
-        with pytest.raises(Exception):
-            client.run("prompt")
+    def test_on_cli_error_called_on_rate_limit(self, _):
+        mock_module, _ = self._make_client_with_sdk_error("429 rate limit exceeded")
+        error_calls: list = []
+        # Executor with Claude unavailable so fallback fails → exception propagates
+        mock_executor = Mock(spec=CLIExecutor)
+        mock_executor.check_available.return_value = False
+        with patch.dict("sys.modules", {"anthropic": mock_module}):
+            client = BackendClient(
+                model="glm-5:cloud",
+                max_retries=1,
+                executor=mock_executor,
+                on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),
+            )
+            with pytest.raises(Exception):
+                client.run("prompt")
         assert any(etype == "rate_limit" for _, etype in error_calls)
 
-    @patch("ai_delegate.client.subprocess.run")
     @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_on_cli_error_called_on_auth_error(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=1, stdout="", stderr="401 unauthorized"
-        )
-        error_calls = []
-        client = BackendClient(
-            model="glm-5:cloud",
-            max_retries=1,
-            on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),
-        )
-        with pytest.raises(Exception):
-            client.run("prompt")
+    def test_on_cli_error_called_on_auth_error(self, _):
+        mock_module, _ = self._make_client_with_sdk_error("401 unauthorized")
+        error_calls: list = []
+        mock_executor = Mock(spec=CLIExecutor)
+        mock_executor.check_available.return_value = False
+        with patch.dict("sys.modules", {"anthropic": mock_module}):
+            client = BackendClient(
+                model="glm-5:cloud",
+                max_retries=1,
+                executor=mock_executor,
+                on_cli_error=lambda cli, etype: error_calls.append((cli, etype)),
+            )
+            with pytest.raises(Exception):
+                client.run("prompt")
         assert any(etype == "auth" for _, etype in error_calls)

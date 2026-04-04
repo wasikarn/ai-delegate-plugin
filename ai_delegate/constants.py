@@ -105,6 +105,17 @@ class RetryConfig:
     API_TIMEOUT = 60       # seconds (reduced from 300; Ollama <10s, cloud APIs <30s)
 
 
+class TimeoutConfig:
+    """Per-backend timeout configuration (seconds).
+
+    Cloud models (GLM, Kimi via Ollama proxy) can take 60-180s per call.
+    Local subprocess calls are fast (<10s).
+    """
+    SUBPROCESS = 60        # subprocess: ollama run, gemini, codex
+    SDK_LOCAL = 60         # SDK → local Ollama (fast models, no :cloud suffix)
+    SDK_CLOUD = 180        # SDK → cloud proxy (GLM, Kimi: 60-180s latency)
+
+
 # =============================================================================
 # Worker Configuration
 # =============================================================================
