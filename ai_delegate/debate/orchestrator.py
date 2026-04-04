@@ -54,6 +54,29 @@ def build_findings(
     return "\n".join(parts)
 
 
+def _resolve_client(
+    base_client: "OllamaClient",
+    task_config: "TaskConfig",
+    expert_name: str,
+) -> "OllamaClient":
+    """
+    Return the appropriate client for an expert.
+
+    If task_config.expert_models has a model override for this expert AND it
+    differs from the base client's model, create and return a new OllamaClient
+    with the override model. Otherwise return base_client unchanged.
+    """
+    model = task_config.expert_models.get(expert_name)
+    if not model or model == getattr(base_client, "model", None):
+        return base_client
+    return OllamaClient(
+        model=model,
+        fallback_model=getattr(base_client, "fallback_model", "sonnet"),
+        verbose=getattr(base_client, "verbose", False),
+        cli_type=getattr(base_client, "cli_type", "ollama"),
+    )
+
+
 class ConsensusCalculator:
     """Calculate consensus between expert findings."""
 
@@ -246,7 +269,8 @@ Output your findings as structured JSON with:
         start_time = time.time()
 
         try:
-            output = self.client.run_json(prompt)
+            client = _resolve_client(self.client, self.task_config, expert_name)
+            output = client.run_json(prompt)
             duration_ms = (time.time() - start_time) * 1000
 
             # Parse findings from JSON
@@ -452,7 +476,8 @@ Instructions:
 Output your revised analysis as JSON."""
 
             try:
-                output = self.client.run_json(prompt)
+                client = _resolve_client(self.client, self.task_config, result.expert_name)
+                output = client.run_json(prompt)
 
                 # Parse new findings from debate output (not reusing old ones)
                 new_findings = []

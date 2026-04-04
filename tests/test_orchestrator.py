@@ -342,6 +342,111 @@ class TestTaskConfigNewFields:
         assert audit_config.sparse_topology_k == 2
 
 
+class TestHeterogeneousModels:
+    """Tests for heterogeneous models (per-expert model assignment)."""
+
+    @pytest.fixture
+    def mock_client(self) -> Any:
+        """Create mock client."""
+        return Mock(spec=OllamaClient)
+
+    @pytest.fixture
+    def audit_config(self) -> TaskConfig:
+        """Create audit config."""
+        return TaskConfig.from_task_type("audit")
+
+    def test_resolve_client_returns_base_when_no_override(
+        self, mock_client: Any, audit_config: TaskConfig
+    ):
+        """_resolve_client should return base client when no override exists."""
+        from ai_delegate.debate.orchestrator import _resolve_client
+
+        result = _resolve_client(mock_client, audit_config, "owasp")
+        assert result is mock_client
+
+    def test_resolve_client_returns_base_when_same_model(
+        self, mock_client: Any, audit_config: TaskConfig
+    ):
+        """_resolve_client should return base client when override is same model."""
+        from ai_delegate.debate.orchestrator import _resolve_client
+
+        # Set base client model
+        mock_client.model = "test-model"
+
+        # Set expert_models to same model
+        audit_config.expert_models = {"owasp": "test-model"}
+
+        result = _resolve_client(mock_client, audit_config, "owasp")
+        assert result is mock_client
+
+    def test_resolve_client_creates_new_client_for_different_model(
+        self, mock_client: Any, audit_config: TaskConfig
+    ):
+        """_resolve_client should create new client when override differs."""
+        from ai_delegate.debate.orchestrator import _resolve_client
+
+        # Set base client properties
+        mock_client.model = "base-model"
+        mock_client.fallback_model = "fallback"
+        mock_client.verbose = True
+        mock_client.cli_type = "ollama"
+
+        # Set expert_models to different model
+        audit_config.expert_models = {"owasp": "override-model"}
+
+        with patch("ai_delegate.debate.orchestrator.OllamaClient") as MockClient:
+            mock_new_client = Mock(spec=OllamaClient)
+            MockClient.return_value = mock_new_client
+
+            result = _resolve_client(mock_client, audit_config, "owasp")
+
+            # Should create new client with override model
+            MockClient.assert_called_once_with(
+                model="override-model",
+                fallback_model="fallback",
+                verbose=True,
+                cli_type="ollama",
+            )
+            assert result is mock_new_client
+
+    def test_expert_runner_uses_per_expert_client(
+        self, mock_client: Any, audit_config: TaskConfig, sample_code: str
+    ):
+        """ExpertRunner should use per-expert clients when configured."""
+        # Set expert_models
+        audit_config.expert_models = {"owasp": "owasp-model", "auth": "auth-model"}
+
+        # Configure mock to return findings
+        mock_client.run_json.return_value = {
+            "findings": [{"severity": "high", "issue": "Test"}]
+        }
+        mock_client.model = "base-model"
+        mock_client.fallback_model = "fallback"
+        mock_client.verbose = False
+        mock_client.cli_type = "ollama"
+
+        orchestrator = DebateOrchestrator(mock_client, audit_config)
+
+        with patch(
+            "ai_delegate.debate.orchestrator._resolve_client"
+        ) as mock_resolve:
+            # Make _resolve_client return mock_client for simplicity
+            mock_resolve.return_value = mock_client
+
+            results = orchestrator.expert_runner.run_parallel(sample_code)
+
+            # Should call _resolve_client for each expert
+            assert mock_resolve.call_count == 3  # owasp, auth, input
+            # Verify calls included expert names
+            call_args = [call[0][2] for call in mock_resolve.call_args_list]
+            assert "owasp" in call_args
+            assert "auth" in call_args
+            assert "input" in call_args
+
+            # Should have results from all experts
+            assert len(results) == 3
+
+
 class TestDebateOrchestratorEdgeCases:
     """Edge case tests for DebateOrchestrator."""
 
