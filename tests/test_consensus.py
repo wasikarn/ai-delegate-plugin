@@ -151,11 +151,11 @@ class TestConsensusCalculator:
         ]
         consensus = ConsensusCalculator.calculate(results)
 
-        # With 3 experts, threshold = 3 * 80 // 100 = 2
-        # XSS found by 3 >= 2 → consensus
-        # CSRF found by 2 >= 2 → consensus (not disputed!)
-        assert len(consensus.consensus_findings) == 2  # Both XSS and CSRF are consensus
-        assert len(consensus.disputed_findings) == 0  # No disputed findings
+        # With 3 experts, threshold = ceil(3 * 80/100) = ceil(2.4) = 3
+        # XSS found by 3 >= 3 → consensus
+        # CSRF found by 2 < 3 → disputed
+        assert len(consensus.consensus_findings) == 1  # Only XSS is consensus
+        assert len(consensus.disputed_findings) == 1   # CSRF is disputed
 
     def test_unique_findings_categorized(self):
         """Findings unique to single expert are tracked."""
@@ -201,8 +201,9 @@ class TestConsensusCalculator:
         assert unique_count >= 0  # May have unique findings
 
     def test_finding_key_normalization(self):
-        """Finding keys are normalized for comparison."""
-        # Same severity + first 50 chars of issue = different keys (issues differ in first 50 chars)
+        """Finding keys are normalized using md5 hash — different issues are different keys."""
+        # These two issues differ after char 50 — old [:50] truncation made them collide
+        # New md5 hash correctly distinguishes them
         results = [
             ExpertResult(
                 expert_name="expert1",
@@ -221,15 +222,10 @@ class TestConsensusCalculator:
         ]
         consensus = ConsensusCalculator.calculate(results)
 
-        # Both are different findings (different first 50 chars)
-        # With 2 experts, threshold = 2 * 80 // 100 = 1
-        # So count >= 1 is consensus, meaning all findings are consensus
-        # But since they have different keys, each appears once (not meeting threshold)
-        # Actually: each key appears once, threshold is 1, so count >= 1 means consensus!
-        # But they're different keys, so 2 unique findings, each with count 1
-        # threshold = 1, count=1 >= 1, so both are consensus
-        # This test was checking the wrong behavior
-        assert consensus.score == 1.0  # All findings meet threshold
+        # With 2 experts, threshold = ceil(2 * 80/100) = ceil(1.6) = 2
+        # Each finding appears once (count=1 < threshold=2) → not consensus
+        # Both are unique findings
+        assert len(consensus.consensus_findings) == 0
 
     def test_with_error_results(self):
         """Results with errors don't break consensus calculation."""
@@ -252,9 +248,11 @@ class TestConsensusCalculator:
         ]
         consensus = ConsensusCalculator.calculate(results)
 
-        # Only 2 successful results, both found XSS
-        # With 2 experts, threshold is 80% * 2 = 1.6, so need 2 experts
-        assert len(consensus.consensus_findings) >= 1
+        # 3 experts total (including errored), threshold = ceil(3 * 80/100) = 3
+        # XSS found by 2 successful experts, 2 < 3 → not consensus but disputed
+        # Calculation still completes without error
+        assert isinstance(consensus.score, float)
+        assert len(consensus.disputed_findings) == 1  # XSS agreed by 2, disputed
 
 
 class TestConsensusThresholds:
@@ -280,7 +278,7 @@ class TestConsensusThresholds:
         """Below 80% threshold is not consensus."""
         findings = [Finding(severity="high", issue="XSS")]
 
-        # 3 experts, 80% = 2.4, need 3 for consensus
+        # 3 experts, threshold = ceil(3 * 80/100) = ceil(2.4) = 3
         results = [
             ExpertResult(expert_name="expert1", expert_type="security", findings=findings),
             ExpertResult(expert_name="expert2", expert_type="security", findings=findings),
@@ -288,7 +286,102 @@ class TestConsensusThresholds:
         ]
         consensus = ConsensusCalculator.calculate(results)
 
-        # 2/3 found XSS, need 2.4 (rounds to threshold check)
-        # Threshold = 3 * 80 // 100 = 2
-        # 2 >= 2, so it's consensus
+        # 2/3 found XSS, need 3 (ceil(2.4)) → NOT consensus
+        assert len(consensus.consensus_findings) == 0
+
+
+class TestConsensusThresholdBoundary:
+    """Boundary tests for math.ceil fix (Task 2)."""
+
+    def test_three_experts_all_agree_is_consensus(self):
+        """3/3 experts agreeing should be consensus at 80% threshold."""
+        results = [
+            ExpertResult("A", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("B", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("C", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
         assert len(consensus.consensus_findings) == 1
+        assert consensus.consensus_findings[0].issue == "SQL injection"
+
+    def test_two_of_three_experts_is_NOT_consensus(self):
+        """2/3 = 66.7% should NOT be consensus at 80% threshold.
+
+        Bug: old code does 3 * 80 // 100 = 2, accepting 2/3 as consensus.
+        Fix: math.ceil(3 * 80 / 100) = 3, requiring 3/3.
+        """
+        results = [
+            ExpertResult("A", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("B", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("C", "audit", findings=[Finding(severity="high", issue="XSS vulnerability")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        # SQL injection appears 2/3 times = 66.7%, below 80% threshold
+        assert len(consensus.consensus_findings) == 0
+        assert len(consensus.disputed_findings) == 1  # 2 experts agreed, 1 didn't
+
+    def test_five_experts_four_agree_is_consensus(self):
+        """4/5 = 80% should be consensus (exactly at threshold)."""
+        results = [
+            ExpertResult("A", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("B", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("C", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("D", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("E", "audit", findings=[Finding(severity="high", issue="XSS")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        # 4/5 = 80% = exactly at threshold (ceil(4.0) = 4)
+        assert len(consensus.consensus_findings) == 1
+
+    def test_five_experts_three_agree_is_NOT_consensus(self):
+        """3/5 = 60% should NOT be consensus."""
+        results = [
+            ExpertResult("A", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("B", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("C", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("D", "audit", findings=[Finding(severity="high", issue="XSS")]),
+            ExpertResult("E", "audit", findings=[Finding(severity="high", issue="CSRF")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        assert len(consensus.consensus_findings) == 0
+
+
+class TestFindingNormalization:
+    """Tests for md5 hash normalization fix (Task 3)."""
+
+    def test_different_issues_with_same_first_50_chars_are_NOT_merged(self):
+        """Two findings with same severity+first50chars but different full text must be separate."""
+        long_prefix = "A" * 49  # 49 chars shared prefix
+        finding_a = Finding(severity="high", issue=long_prefix + "Z_additional_context_A")
+        finding_b = Finding(severity="high", issue=long_prefix + "Z_additional_context_B")
+
+        results = [
+            ExpertResult("Expert1", "audit", findings=[finding_a]),
+            ExpertResult("Expert2", "audit", findings=[finding_b]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+
+        # Old code: both get key "high|" + 49*"A" + "Z" (same first 50), merged as consensus
+        # New code: different md5 hashes, treated as separate unique findings
+        assert len(consensus.consensus_findings) == 0
+
+    def test_identical_issues_ARE_merged(self):
+        """Same finding from all experts should still create consensus."""
+        results = [
+            ExpertResult("Expert1", "audit", findings=[Finding(severity="high", issue="SQL injection on line 42")]),
+            ExpertResult("Expert2", "audit", findings=[Finding(severity="high", issue="SQL injection on line 42")]),
+            ExpertResult("Expert3", "audit", findings=[Finding(severity="high", issue="SQL injection on line 42")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        assert len(consensus.consensus_findings) == 1
+
+    def test_same_issue_different_severity_are_separate_findings(self):
+        """Same issue text but different severity = different keys."""
+        results = [
+            ExpertResult("Expert1", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+            ExpertResult("Expert2", "audit", findings=[Finding(severity="critical", issue="SQL injection")]),
+            ExpertResult("Expert3", "audit", findings=[Finding(severity="high", issue="SQL injection")]),
+        ]
+        consensus = ConsensusCalculator.calculate(results)
+        # "high|SQL injection" appears 2/3 (not consensus), "critical|SQL injection" appears 1/3
+        assert len(consensus.consensus_findings) == 0

@@ -5,6 +5,8 @@ Coordinates parallel expert analysis, debate rounds, and adjudication.
 """
 
 import json
+import math
+import hashlib
 import time
 import logging
 import atexit
@@ -84,14 +86,15 @@ class ConsensusCalculator:
 
         for finding in all_findings:
             # Normalize finding key
-            key = f"{finding.severity}|{finding.issue[:50]}"  # Use first 50 chars
+            _raw = f"{finding.severity}|{finding.issue}"
+            key = hashlib.md5(_raw.encode()).hexdigest()
             finding_counts[key] = finding_counts.get(key, 0) + 1
             if key not in finding_by_key:
                 finding_by_key[key] = []
             finding_by_key[key].append(finding)
 
-        # Calculate consensus threshold (80% of experts)
-        threshold = len(expert_results) * QualityThresholds.CONSENSUS_PERCENTAGE // 100
+        # Calculate consensus threshold (80% of experts, ceiling to avoid false consensus)
+        threshold = math.ceil(len(expert_results) * QualityThresholds.CONSENSUS_PERCENTAGE / 100)
 
         # Categorize findings
         consensus_findings: List[Finding] = []
