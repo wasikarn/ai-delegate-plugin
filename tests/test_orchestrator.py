@@ -355,3 +355,62 @@ def hello():
         result = orchestrator.analyze(unicode_code)
 
         assert isinstance(result, Verdict)
+
+    def test_debate_phase_runs_parallel(
+        self, mock_client: Any, audit_config: TaskConfig, sample_code: str
+    ):
+        """DebatePhase.run() should execute in parallel, not sequentially."""
+        import time
+
+        call_times = []
+
+        def slow_response(prompt: str) -> dict:
+            """Simulate slow expert responses (50ms each)."""
+            call_times.append(time.time())
+            time.sleep(0.05)  # 50ms per call
+            return {
+                "findings": [{"severity": "high", "issue": "Test finding"}],
+                "recommendations": ["Fix issue"],
+                "action_items": ["Implement fix"],
+            }
+
+        mock_client.run_json.side_effect = slow_response
+
+        orchestrator = DebateOrchestrator(mock_client, audit_config)
+        debate_results = [
+            ExpertResult(
+                expert_name="owasp",
+                expert_type="audit",
+                findings=[Finding(severity="high", issue="SQL injection")],
+                raw_output='{"findings": []}',
+            ),
+            ExpertResult(
+                expert_name="auth",
+                expert_type="audit",
+                findings=[Finding(severity="medium", issue="Auth bypass")],
+                raw_output='{"findings": []}',
+            ),
+            ExpertResult(
+                expert_name="input",
+                expert_type="audit",
+                findings=[Finding(severity="low", issue="Input validation")],
+                raw_output='{"findings": []}',
+            ),
+            ExpertResult(
+                expert_name="extra",
+                expert_type="audit",
+                findings=[Finding(severity="low", issue="Extra finding")],
+                raw_output='{"findings": []}',
+            ),
+        ]
+
+        start_time = time.time()
+        results = orchestrator.debate_phase.run(debate_results)
+        elapsed = time.time() - start_time
+
+        # If sequential: ~0.2s (4 experts × 50ms)
+        # If parallel: ~0.05s (max 50ms for any expert)
+        # Assert execution was parallel: should be < 0.15s
+        assert elapsed < 0.15, f"Expected parallel execution (<0.15s), got {elapsed:.3f}s"
+        assert isinstance(results, list)
+        assert len(results) == len(debate_results)

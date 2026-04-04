@@ -102,7 +102,7 @@ class RetryConfig:
     BACKOFF_MULTIPLIER = 2
 
     # API timeout
-    API_TIMEOUT = 300      # seconds
+    API_TIMEOUT = 60       # seconds (reduced from 300; Ollama <10s, cloud APIs <30s)
 
 
 # =============================================================================

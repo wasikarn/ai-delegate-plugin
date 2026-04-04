@@ -16,14 +16,19 @@ class ContextLoader:
 
     def __init__(self, base_dir: Optional[Path] = None):
         self.base_dir = base_dir or Path.cwd()
+        self._cached_context: Optional[str] = None
+        self._loaded: bool = False
 
     def load(self) -> Optional[str]:
-        """Load context from first found context file, or None."""
-        for relative_path in CONTEXT_PATHS:
-            full_path = self.base_dir / relative_path
-            if full_path.exists():
-                return full_path.read_text(encoding="utf-8").strip()
-        return None
+        """Load context from first found context file, cached after first read."""
+        if not self._loaded:
+            for relative_path in CONTEXT_PATHS:
+                full_path = self.base_dir / relative_path
+                if full_path.exists():
+                    self._cached_context = full_path.read_text(encoding="utf-8").strip()
+                    break
+            self._loaded = True
+        return self._cached_context
 
     def format_for_prompt(self) -> str:
         """Return context formatted for injection into expert prompts.

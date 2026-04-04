@@ -5,6 +5,7 @@ Philosophy: "Push to the right man for the right job" - Select the best availabl
 CLI and model combination for each task type.
 """
 
+import functools
 import time
 import shutil
 import logging
@@ -175,6 +176,7 @@ def detect_complexity(content: str, task_type: str) -> ComplexityLevel:
     return ComplexityLevel.HIGH
 
 
+@functools.lru_cache(maxsize=16)
 def get_model_for_complexity(complexity: ComplexityLevel, budget_mode: bool = False) -> Dict:
     """
     Get model config for complexity level.
@@ -372,8 +374,10 @@ class SmartRouter:
             )
             return static_config, static_model
 
-        # Phase 1: Sort by win_rate from cli_performance (includes pre-seeded priors)
-        perf_rows = memory.get_cli_performance(task_type)
+        # Phase 1: Sort by win_rate — batch both queries in one DB round-trip
+        perf_rows, recent = memory.get_routing_context(
+            task_type, recent_limit=AdaptiveConfig.ANTI_THRASH_WINDOW
+        )
         perf_map = {row["cli_name"]: row for row in perf_rows}
 
         sorted_available = sorted(
@@ -386,7 +390,6 @@ class SmartRouter:
         current_best_type, current_best_config = sorted_available[0]
 
         # Anti-thrash guard: >=3 distinct CLIs in last ANTI_THRASH_WINDOW runs -> hold static
-        recent = memory.get_recent_cli_runs(task_type, limit=AdaptiveConfig.ANTI_THRASH_WINDOW)
         if len(set(recent)) >= AdaptiveConfig.ANTI_THRASH_DISTINCT_LIMIT:
             logger.info(
                 f"Anti-thrash: holding static CLI {static_config.cli_type.value} for {task_type}"

@@ -66,6 +66,9 @@ class AnalysisMemory:
 
     def _init_db(self) -> None:
         with self._connect() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=-65536")  # 64 MB page cache
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS analysis_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -331,3 +334,34 @@ class AnalysisMemory:
                 (task_type, limit),
             ).fetchall()
         return [r[0] for r in rows]
+
+    def get_routing_context(self, task_type: str, recent_limit: int = 3) -> tuple:
+        """
+        Batch query: fetch cli_performance rows AND recent run names in one connection.
+
+        Returns:
+            (perf_rows: List[Dict], recent_cli_names: List[str])
+        """
+        with self._connect() as conn:
+            perf_rows = conn.execute(
+                """SELECT cli_name, win_rate, win_count, loss_count, run_count, last_updated
+                   FROM cli_performance WHERE task_type = ?
+                   ORDER BY win_rate DESC""",
+                (task_type,),
+            ).fetchall()
+            recent_rows = conn.execute(
+                """SELECT cli_name FROM analysis_runs
+                   WHERE task_type = ? AND cli_name IS NOT NULL
+                   ORDER BY id DESC LIMIT ?""",
+                (task_type, recent_limit),
+            ).fetchall()
+        return (
+            [
+                {
+                    "cli_name": r[0], "win_rate": r[1], "win_count": r[2],
+                    "loss_count": r[3], "run_count": r[4], "last_updated": r[5],
+                }
+                for r in perf_rows
+            ],
+            [r[0] for r in recent_rows],
+        )

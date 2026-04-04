@@ -6,7 +6,6 @@ Coordinates parallel expert analysis, debate rounds, and adjudication.
 
 import json
 import math
-import hashlib
 import time
 import logging
 import atexit
@@ -81,14 +80,13 @@ class ConsensusCalculator:
             return ConsensusResult(score=1.0)
 
         # Count findings by normalized key, tracking which expert raised each
-        finding_counts: Dict[str, int] = {}
-        finding_by_key: Dict[str, List[Finding]] = {}
-        finding_key_to_expert: Dict[str, str] = {}  # key → first expert who raised it
+        finding_counts: Dict[tuple, int] = {}
+        finding_by_key: Dict[tuple, List[Finding]] = {}
+        finding_key_to_expert: Dict[tuple, str] = {}  # key → first expert who raised it
 
         for result in expert_results:
             for finding in result.findings:
-                _raw = f"{finding.severity}|{finding.issue}"
-                key = hashlib.md5(_raw.encode()).hexdigest()
+                key = (finding.severity, finding.issue)
                 finding_counts[key] = finding_counts.get(key, 0) + 1
                 if key not in finding_by_key:
                     finding_by_key[key] = []
@@ -417,7 +415,7 @@ class DebatePhase:
 
     def run(self, expert_results: List[ExpertResult]) -> List[ExpertResult]:
         """
-        Run debate phase between experts.
+        Run debate phase between experts in parallel.
 
         Args:
             expert_results: Results from initial expert analysis
@@ -425,25 +423,26 @@ class DebatePhase:
         Returns:
             Updated results after debate
         """
-        debate_results: List[ExpertResult] = []
+        import concurrent.futures
 
-        for result in expert_results:
-            if result.error:
-                continue
+        valid_results = [r for r in expert_results if not r.error]
+        if not valid_results:
+            return []
 
-            # Build other findings string
-            other_findings = build_findings(
-                expert_results,
-                exclude=result.expert_name,
-            )
+        # Pre-build per-expert "other findings" strings once — O(n) instead of O(n^2)
+        other_findings_map = {
+            r.expert_name: build_findings(expert_results, exclude=r.expert_name)
+            for r in valid_results
+        }
 
+        def _debate_one(result: ExpertResult) -> ExpertResult:
             prompt = f"""You are the {result.expert_name} Expert.
 
 Your initial findings:
 {result.raw_output}
 
 Other experts' findings:
-{other_findings}
+{other_findings_map[result.expert_name]}
 
 Instructions:
 1. Compare your findings with other experts
@@ -467,15 +466,34 @@ Output your revised analysis as JSON."""
                 # Fall back to original findings if debate produced none
                 final_findings = new_findings if new_findings else result.findings
 
-                debate_results.append(ExpertResult(
+                return ExpertResult(
                     expert_name=result.expert_name,
                     expert_type=result.expert_type,
                     findings=final_findings,
                     raw_output=json.dumps(output),
-                ))
+                )
             except Exception as e:
                 logger.error(f"Debate failed for {result.expert_name}: {e}")
-                debate_results.append(result)
+                return result
+
+        debate_results: List[ExpertResult] = []
+        futures = {
+            ExpertRunner._executor.submit(_debate_one, result): result.expert_name
+            for result in valid_results
+        }
+
+        for future in concurrent.futures.as_completed(futures):
+            expert_name = futures[future]
+            try:
+                debate_results.append(future.result())
+                if self.verbose:
+                    logger.info(f"[{expert_name} Debate] completed")
+            except Exception as e:
+                logger.error(f"Debate future failed for {expert_name}: {e}")
+                for r in valid_results:
+                    if r.expert_name == expert_name:
+                        debate_results.append(r)
+                        break
 
         return debate_results
 
@@ -549,21 +567,31 @@ class DebateOrchestrator:
                 for method in methods:
                     expert_results = engine.apply(method, expert_results, content)
 
-            # Phase 2: Calculate consensus
-            consensus = ConsensusCalculator.calculate(expert_results)
+            # Phase 2: Calculate consensus — skip if always_deep (result unused),
+            # or if tier is explicit non-AUTO (except FAST needs consensus for verdict)
+            is_auto = tier == Tier.AUTO.value
+            needs_consensus = (is_auto and not self.task_config.always_deep) or tier == Tier.FAST.value
 
-            # Determine tier — force DEEP if all experts returned zero findings (AUTO mode only)
-            if tier == Tier.AUTO.value and ForcedFindingValidator.should_force_deep(expert_results):
-                logger.warning("All experts returned 0 findings — forcing DEEP tier for deeper analysis")
-                selected_tier = Tier.DEEP.value
+            if needs_consensus:
+                consensus = ConsensusCalculator.calculate(expert_results)
+                if is_auto and ForcedFindingValidator.should_force_deep(expert_results):
+                    logger.warning("All experts returned 0 findings — forcing DEEP tier for deeper analysis")
+                    selected_tier = Tier.DEEP.value
+                else:
+                    selected_tier = self._select_tier(tier, consensus)
             else:
-                selected_tier = self._select_tier(tier, consensus)
+                consensus = None
+                selected_tier = Tier.DEEP.value if is_auto else tier
 
             if self.verbose:
-                logger.info(f"Consensus: {consensus.percentage:.0f}% → Tier: {selected_tier}")
+                if consensus:
+                    logger.info(f"Consensus: {consensus.percentage:.0f}% → Tier: {selected_tier}")
+                else:
+                    logger.info(f"Tier: {selected_tier} (consensus skipped)")
 
-            # FAST tier: Return consensus directly
+            # FAST tier: Return consensus directly (consensus guaranteed non-None here)
             if selected_tier == Tier.FAST.value:
+                assert consensus is not None  # needs_consensus=True when FAST tier is selected
                 return self._create_verdict_from_consensus(
                     consensus, selected_tier
                 )
