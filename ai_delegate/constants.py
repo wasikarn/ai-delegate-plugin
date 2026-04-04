@@ -269,3 +269,49 @@ CLI_STRENGTHS = {
     "claude": ["reasoning", "structured_output", "safety"],
     "glm": ["chinese_market", "structured_output", "cloud"],
 }
+
+
+# =============================================================================
+# Adaptive Routing Configuration
+# =============================================================================
+
+class AdaptiveConfig:
+    """Constants for the adaptive CLI routing algorithm."""
+
+    STREAK_WINDOW = 3  # consecutive runs to trigger streak lock/skip
+    MIN_RUNS_BEFORE_OVERRIDE = 10  # Phase 3 gate (rated runs only)
+    WIN_RATE_DELTA_THRESHOLD = 0.15  # 15 percentage points for permanent override
+    ANTI_THRASH_WINDOW = 3  # look-back window for oscillation detection
+    ANTI_THRASH_DISTINCT_LIMIT = 3  # ≥3 distinct CLIs in window = thrashing
+
+
+class HealthConfig:
+    """TTL constants (seconds) for CLI health degradation."""
+
+    RATE_LIMIT_TTL = 300.0  # 5 min burst window
+    NETWORK_TTL = 60.0  # 1 min transient blip
+    AUTH_TTL = float("inf")  # indefinite — needs user intervention
+
+
+# CLI_PRIORS: pre-seeded win rates stored as virtual runs at _init_db() time.
+# win_rate=0.80 → 8 wins, 2 losses out of 10 virtual runs
+CLI_PRIORS: Dict[str, Dict[str, float]] = {
+    "codex": {"architecture": 0.80, "refactor": 0.75, "migrate": 0.75},
+    "claude": {"audit": 0.80, "analyze": 0.75, "review": 0.75},
+    "ollama": {
+        "audit": 0.70,
+        "analyze": 0.70,
+        "architecture": 0.65,
+        "review": 0.70,
+        "refactor": 0.65,
+        "migrate": 0.65,
+    },
+    "gemini": {
+        "audit": 0.65,
+        "analyze": 0.70,
+        "architecture": 0.65,
+        "review": 0.70,
+        "refactor": 0.65,
+        "migrate": 0.65,
+    },
+}
