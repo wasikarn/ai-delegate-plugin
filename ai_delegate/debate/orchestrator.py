@@ -153,10 +153,12 @@ class ExpertRunner:
     # Shared thread pool for all instances
     _executor: ClassVar[ThreadPoolExecutor] = ThreadPoolExecutor(max_workers=WorkerConstants.ORCHESTRATOR_MAX_WORKERS)
 
-    def __init__(self, client: OllamaClient, task_config: TaskConfig, verbose: bool = False):
+    def __init__(self, client: OllamaClient, task_config: TaskConfig, verbose: bool = False,
+                 context_prefix: str = ""):
         self.client = client
         self.task_config = task_config
         self.verbose = verbose
+        self.context_prefix = context_prefix
 
     def run_parallel(self, content: str) -> List[ExpertResult]:
         """
@@ -218,7 +220,7 @@ class ExpertRunner:
                 f"Your style: {persona['style']}\n\n"
             )
 
-        prompt = f"""{persona_intro}{expert_prompt}
+        prompt = f"""{persona_intro}{self.context_prefix}{expert_prompt}
 
 Content to analyze:
 ```
@@ -502,8 +504,12 @@ class DebateOrchestrator:
         self.task_config = task_config
         self.verbose = verbose
 
+        # Load project constitution if available
+        from ..context_loader import ContextLoader
+        context_prefix = ContextLoader().format_for_prompt()
+
         # Initialize components
-        self.expert_runner = ExpertRunner(client, task_config, verbose)
+        self.expert_runner = ExpertRunner(client, task_config, verbose, context_prefix=context_prefix)
         self.adjudicator = Adjudicator(client, task_config, verbose)
         self.debate_phase = DebatePhase(client, task_config, verbose)
 
