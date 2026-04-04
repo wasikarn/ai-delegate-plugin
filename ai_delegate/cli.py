@@ -21,6 +21,19 @@ from .config import (
 from .validation import validate_file_path
 
 
+def _format_model_display(model: str) -> str:
+    """Format model name with its CLI backend for display."""
+    if "glm" in model or "kimi" in model:
+        return f"ollama {model}"
+    if model in ("haiku", "sonnet", "opus"):
+        return f"claude {model}"
+    if "gemini" in model:
+        return f"gemini {model}"
+    if model in ("gpt-4o", "o3-mini"):
+        return f"codex {model}"
+    return model
+
+
 def create_task_config(task_type: str) -> TaskConfig:
     """Create task configuration from task type."""
     return TaskConfig.from_task_type(task_type)
@@ -251,6 +264,10 @@ Examples:
         flow = FlowConfig.from_mode(args.flow)
         tier = flow.tier
         elicit = flow.elicit
+
+    # Always show which model/CLI will be used
+    effective_model = args.model or DEFAULT_MODELS.get(args.task_type, "glm-5:cloud")
+    print(f"Using: {_format_model_display(effective_model)}")
 
     # Run analysis
     try:
