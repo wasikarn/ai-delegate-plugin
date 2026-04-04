@@ -5,7 +5,7 @@ Multi-agent adaptive delegation framework with domain expert debate system.
 Supports multiple backends: ollama, gemini, codex.
 """
 
-__version__ = "0.0.2"
+__version__ = "0.1.0"
 __author__ = "KoBig"
 
 from .client import AIClient, OllamaClient
