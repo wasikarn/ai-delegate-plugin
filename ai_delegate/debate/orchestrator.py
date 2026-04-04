@@ -129,6 +129,24 @@ class ConsensusCalculator:
         )
 
 
+class ForcedFindingValidator:
+    """Ensure that zero expert findings triggers deeper analysis."""
+
+    @staticmethod
+    def should_force_deep(expert_results: List[ExpertResult]) -> bool:
+        """
+        Return True if all non-errored experts returned zero findings.
+
+        When all experts return nothing, we assume shallow analysis rather than
+        a perfectly clean codebase. Force DEEP tier to re-examine.
+        """
+        successful = [r for r in expert_results if not r.error]
+        if not successful:
+            return False  # All errored — can't judge
+        total_findings = sum(len(r.findings) for r in successful)
+        return total_findings == 0
+
+
 class ExpertRunner:
     """Runs expert analysis in parallel using pooled threads."""
 
@@ -493,8 +511,12 @@ class DebateOrchestrator:
             # Phase 2: Calculate consensus
             consensus = ConsensusCalculator.calculate(expert_results)
 
-            # Determine tier
-            selected_tier = self._select_tier(tier, consensus)
+            # Determine tier — force DEEP if all experts returned zero findings
+            if ForcedFindingValidator.should_force_deep(expert_results):
+                logger.warning("All experts returned 0 findings — forcing DEEP tier for deeper analysis")
+                selected_tier = Tier.DEEP.value
+            else:
+                selected_tier = self._select_tier(tier, consensus)
 
             if self.verbose:
                 logger.info(f"Consensus: {consensus.percentage:.0f}% → Tier: {selected_tier}")
