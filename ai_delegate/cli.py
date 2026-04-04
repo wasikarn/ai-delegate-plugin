@@ -51,6 +51,15 @@ def run_analysis(
     # Create task config
     config = create_task_config(task_type)
 
+    # Load custom expert plugins
+    from .plugin_registry import PluginRegistry
+    registry = PluginRegistry()
+    custom_experts = registry.for_task(task_type)
+    for plugin in custom_experts:
+        config.experts.update(plugin.to_expert_dict())
+    if custom_experts and verbose:
+        print(f"Loaded {len(custom_experts)} custom expert(s): {[p.name for p in custom_experts]}")
+
     # Override model if specified
     if model:
         config.default_model = model
@@ -74,7 +83,29 @@ def run_analysis(
         )
         verdict = orchestrator.analyze(content, tier=tier, elicit=elicit)
 
-    return verdict.to_dict()
+    result = verdict.to_dict()
+
+    # Store result in memory and check for regressions (non-critical, best effort)
+    try:
+        from .memory import AnalysisMemory, MemoryRecord
+        findings = result.get("findings", [])
+        record = MemoryRecord(
+            file_path=f"<content:{task_type}>",
+            task_type=task_type,
+            consensus_score=result["consensus_score"],
+            finding_count=len(findings),
+            critical_count=sum(1 for f in findings if f.get("severity", "").lower() == "critical"),
+            high_count=sum(1 for f in findings if f.get("severity", "").lower() == "high"),
+            findings_summary="; ".join(f.get("issue", "")[:80] for f in findings[:10]),
+        )
+        memory = AnalysisMemory()
+        regression = memory.detect_regression(record)
+        memory.store(record)
+        result["regression"] = regression
+    except Exception:
+        pass  # Memory is non-critical
+
+    return result
 
 
 def main():
@@ -274,6 +305,14 @@ Examples:
                 print("\nRecommendations:")
                 for rec in result['recommendations']:
                     print(f"  - {rec}")
+
+        regression = result.get("regression")
+        if regression and regression.get("new_findings", 0) > 0:
+            print(
+                f"\nREGRESSION: +{regression['new_findings']} new findings "
+                f"(+{regression['new_critical']} critical) vs last run",
+                file=sys.stderr,
+            )
 
         if args.show_cost:
             from .cost_tracker import CostTracker

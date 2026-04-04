@@ -80,18 +80,20 @@ class ConsensusCalculator:
         if not all_findings:
             return ConsensusResult(score=1.0)
 
-        # Count findings by normalized key
+        # Count findings by normalized key, tracking which expert raised each
         finding_counts: Dict[str, int] = {}
         finding_by_key: Dict[str, List[Finding]] = {}
+        finding_key_to_expert: Dict[str, str] = {}  # key → first expert who raised it
 
-        for finding in all_findings:
-            # Normalize finding key
-            _raw = f"{finding.severity}|{finding.issue}"
-            key = hashlib.md5(_raw.encode()).hexdigest()
-            finding_counts[key] = finding_counts.get(key, 0) + 1
-            if key not in finding_by_key:
-                finding_by_key[key] = []
-            finding_by_key[key].append(finding)
+        for result in expert_results:
+            for finding in result.findings:
+                _raw = f"{finding.severity}|{finding.issue}"
+                key = hashlib.md5(_raw.encode()).hexdigest()
+                finding_counts[key] = finding_counts.get(key, 0) + 1
+                if key not in finding_by_key:
+                    finding_by_key[key] = []
+                    finding_key_to_expert[key] = result.expert_name
+                finding_by_key[key].append(finding)
 
         # Calculate consensus threshold (80% of experts, ceiling to avoid false consensus)
         threshold = math.ceil(len(expert_results) * QualityThresholds.CONSENSUS_PERCENTAGE / 100)
@@ -109,8 +111,8 @@ class ConsensusCalculator:
                 # Disputed finding
                 disputed_findings.append(finding_by_key[key][0])
             else:
-                # Unique finding
-                expert_name = finding_by_key[key][0].metadata.get("expert", "unknown")
+                # Unique finding — keyed by expert_name from ExpertResult
+                expert_name = finding_key_to_expert.get(key, "unknown")
                 if expert_name not in unique_findings:
                     unique_findings[expert_name] = []
                 unique_findings[expert_name].append(finding_by_key[key][0])
@@ -121,18 +123,15 @@ class ConsensusCalculator:
 
         score = consensus_count / total_unique if total_unique > 0 else 1.0
 
-        # Build disagreement summary
-        disagreement_summary = ""
-        if disputed_findings or unique_findings:
-            parts = []
-            if disputed_findings:
-                issues = ", ".join(f.issue for f in disputed_findings[:3])
-                parts.append(f"{len(disputed_findings)} disputed finding(s): {issues}")
-            if unique_findings:
-                for expert, findings in unique_findings.items():
-                    issues = ", ".join(f.issue for f in findings[:2])
-                    parts.append(f"{expert} raised {len(findings)} unique finding(s): {issues}")
-            disagreement_summary = "; ".join(parts)
+        # Build disagreement summary (keyed by expert_name)
+        disagreement_parts = []
+        for expert_name, findings in unique_findings.items():
+            issues = [f.issue for f in findings[:3]]
+            if issues:
+                disagreement_parts.append(
+                    f"{expert_name} uniquely raised: {', '.join(issues)}"
+                )
+        disagreement_summary = "; ".join(disagreement_parts)
 
         return ConsensusResult(
             score=score,
