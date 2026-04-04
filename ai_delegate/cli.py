@@ -145,6 +145,11 @@ def run_analysis(
         regression = memory.detect_regression(record)
         run_id = memory.store(record)
         memory.record_cli_run(run_id, cli_config.cli_name)
+        memory.store_findings(
+            analysis_run_id=run_id,
+            task_type=task_type,
+            findings=findings,
+        )
         result["regression"] = regression
         result["_run_id"] = run_id
         result["_cli_name"] = cli_config.cli_name
@@ -188,11 +193,46 @@ def _handle_rate_subcommand(args: list) -> None:
     sys.exit(0)
 
 
+def _handle_search_subcommand(args: list) -> None:
+    """Handle 'ai-delegate search <query>' subcommand."""
+    import argparse as _ap
+    parser = _ap.ArgumentParser(prog="ai-delegate search", description="Search past findings in memory")
+    parser.add_argument("query", help="Text to search for in past findings")
+    parser.add_argument(
+        "--task-type",
+        choices=["audit", "analyze", "architecture", "refactor", "migrate", "review"],
+        help="Filter by task type",
+    )
+    parser.add_argument(
+        "--severity",
+        choices=["critical", "high", "medium", "low", "info"],
+        help="Filter by severity",
+    )
+    parser.add_argument("--limit", type=int, default=20, help="Max results (default: 20)")
+    parsed = parser.parse_args(args)
+
+    results = AnalysisMemory().search_findings(
+        query=parsed.query,
+        task_type=parsed.task_type,
+        severity=parsed.severity,
+        limit=parsed.limit,
+    )
+    if not results:
+        print("No findings matched.")
+    else:
+        for r in results:
+            print(f"[{r['severity'].upper()}] ({r['task_type']}) {r['issue_text']}")
+    sys.exit(0)
+
+
 def main():
     """Main CLI entry point."""
-    # Handle 'rate' subcommand before main parser (avoids positional arg conflict)
+    # Handle pre-parser subcommands (avoids positional arg conflict with task_type)
     if sys.argv[1:2] == ["rate"]:
         _handle_rate_subcommand(sys.argv[2:])
+        return
+    if sys.argv[1:2] == ["search"]:
+        _handle_search_subcommand(sys.argv[2:])
         return
 
     parser = argparse.ArgumentParser(
