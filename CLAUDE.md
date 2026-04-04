@@ -64,6 +64,7 @@ from ai_delegate.constants import (
     ComplexityThresholds, # LOW_LINES=100, MEDIUM_LINES=500
     QualityThresholds,    # FAST=90%, STANDARD=70%
     RetryConfig,         # MAX_RETRIES=3, API_TIMEOUT=300
+    TimeoutConfig,       # SUBPROCESS=60s, SDK_LOCAL=60s, SDK_CLOUD=180s
     CLIPriority,         # OLLAMA=1, GEMINI=2, etc.
     TaskTypes,           # AUDIT, ANALYZE, ARCHITECTURE, etc.
     WorkerConstants,     # DEFAULT_MAX_WORKERS=4
@@ -87,7 +88,7 @@ from ai_delegate.constants import (
 - `ai_delegate/supervisor.py` - Supervisor+Worker pattern
 - `ai_delegate/debate/orchestrator.py` - Debate orchestration, heterogeneous models, sparse topology
 - `ai_delegate/models.py` - TaskConfig dataclass (expert_models, sparse_topology_k)
-- `ai_delegate/client.py` - Ollama client with fallback
+- `ai_delegate/client.py` - BackendClient: Anthropic SDK → Ollama proxy (localhost:11434) with fallback
 
 ## Debate Quality Features
 
@@ -120,7 +121,7 @@ config = TaskConfig.from_task_type("audit", sparse_topology_k=2)
 python -m pytest tests/ -v --cov=ai_delegate
 ```
 
-500 tests, 97% coverage.
+512 tests, 97% coverage.
 
 ## No Hardcoding Rule
 

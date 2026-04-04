@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/wasikarn/ai-delegate-plugin)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-500%20tests-97%25%20coverage-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-512%20tests-97%25%20coverage-brightgreen.svg)]()
 
 ---
 
@@ -45,7 +45,7 @@
 
 Automatically selects the best available AI CLI and model for each task:
 
-- **Ollama** (glm-5:cloud, kimi-k2.5:cloud) - Structured output, cloud models
+- **Ollama** (glm-5:cloud, kimi-k2.5:cloud) - Anthropic SDK via localhost:11434 proxy
 - **Gemini** (gemini-2.0-flash, gemini-2.5-pro) - Fast, multimodal
 - **Codex** (gpt-4o, o3-mini) - Code generation, reasoning
 - **Claude** (sonnet, opus) - Fallback, safety
@@ -155,6 +155,9 @@ One-time installation (required for CLI commands):
 
 ```bash
 pip install -e /path/to/ai-delegate-plugin --break-system-packages
+
+# Optional: Anthropic SDK for Ollama proxy support (GLM, Kimi cloud models)
+pip install 'ai-delegate[sdk]'
 ```
 
 Verify:
@@ -162,6 +165,21 @@ Verify:
 ```bash
 ai-delegate --version
 ```
+
+### Ollama Setup (for GLM/Kimi cloud models)
+
+The plugin calls Ollama via the Anthropic SDK (not subprocess), so you need:
+
+```bash
+# Start Ollama server
+ollama serve
+
+# Pull models (one-time)
+ollama pull glm-5:cloud
+ollama pull kimi-k2.5:cloud
+```
+
+Cloud models (`:cloud` suffix) use a 180s timeout; local models use 60s.
 
 ---
 
@@ -197,7 +215,7 @@ ai-delegate --version
 ```python
 from ai_delegate import (
     SmartRouter,
-    OllamaClient,
+    BackendClient,
     DebateOrchestrator,
     TaskConfig,
     detect_complexity,
@@ -221,8 +239,8 @@ config = get_model_for_complexity(complexity, budget_mode=True)
 router = SmartRouter()
 cli_type, model = router.select_cli_for_task("audit")
 
-# Create orchestrator with selected model
-client = OllamaClient(model=model)
+# Create orchestrator — BackendClient uses Anthropic SDK → Ollama proxy
+client = BackendClient(model=model)
 config = TaskConfig.from_task_type("audit")
 orchestrator = DebateOrchestrator(client=client, task_config=config)
 verdict = orchestrator.analyze(content, tier="auto")
@@ -246,7 +264,7 @@ from ai_delegate import create_supervisor, WorkerType
 supervisor = create_supervisor(budget_mode=True, max_workers=4)
 
 # Delegate single task
-result = supervisor.delegate(
+result = supervisor.execute_task(
     WorkerType.CODE,
     analyze_code,
     file_path="src/auth.py"
@@ -419,17 +437,18 @@ All configuration values are centralized in `constants.py`:
 
 ```python
 from ai_delegate.constants import (
-    Models,           # Model name constants
-    TokenLimits,      # Token limits (2000, 4000, 8000)
-    ComplexityThresholds,  # Line thresholds (100, 500)
+    Models,               # Model name constants
+    TokenLimits,          # Token limits (2000, 4000, 8000)
+    ComplexityThresholds, # Line thresholds (100, 500)
     QualityThresholds,    # Consensus thresholds (70, 90, 80%)
-    RetryConfig,      # Retry/timeout constants
-    WorkerConstants,  # Worker configuration
-    CLIPriority,      # Fallback priority (1-5)
-    TaskTypes,        # Task type constants
-    ExpertDomains,    # Expert domain constants
-    DEFAULT_MODELS,   # Task-to-model mapping
-    CLI_STRENGTHS,    # CLI capability mapping
+    RetryConfig,          # Retry/timeout constants
+    TimeoutConfig,        # Per-backend timeouts (SDK_CLOUD=180s, SUBPROCESS=60s)
+    WorkerConstants,      # Worker configuration
+    CLIPriority,          # Fallback priority (1-5)
+    TaskTypes,            # Task type constants
+    ExpertDomains,        # Expert domain constants
+    DEFAULT_MODELS,       # Task-to-model mapping
+    CLI_STRENGTHS,        # CLI capability mapping
 )
 
 # Example usage
@@ -448,7 +467,7 @@ max_workers = WorkerConstants.DEFAULT_MAX_WORKERS  # 4
 python -m pytest tests/ -v --cov=ai_delegate
 ```
 
-- **500 tests**, 97% coverage
+- **512 tests**, 97% coverage
 - `test_complexity.py` - Complexity detection tests
 - `test_supervisor.py` - Supervisor+Worker pattern tests
 - `test_router.py` - Smart router and model selection tests
