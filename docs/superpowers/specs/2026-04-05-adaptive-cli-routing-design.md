@@ -12,6 +12,8 @@
 - **Phase 2 — Streak correction (runs 3+):** If a CLI wins or loses 3 consecutive times, flip routing immediately. Catches wrong priors in 3–5 runs.
 - **Phase 3 — Win rate (runs 10+):** Long-run win rate delta ≥15pp triggers permanent routing decision.
 
+**Health monitoring:** Before routing, check if CLI is actually usable (not just installed). Degraded CLIs are skipped automatically with fallback to next best.
+
 ---
 
 ## Section 1: Data Layer
@@ -85,11 +87,88 @@ def get_recent_cli_runs(self, task_type: str, limit: int = 3) -> List[str]:
 
 ---
 
+## Section 1b: CLI Health Monitoring
+
+### Design
+
+In-memory only — no SQLite. Health state is ephemeral: a CLI degraded last session may be healthy now. Persisting state would risk blacklisting healthy CLIs after restart.
+
+```python
+# In router.py — lives inside SmartRouter
+class CliHealthMonitor:
+    """In-memory CLI health tracker. Fresh per session, zero I/O on healthy runs."""
+
+    _TTL: Dict[str, float] = {
+        "rate_limit": 300.0,       # 5 min — temporary burst window
+        "network":     60.0,       # 1 min — transient blip
+        "auth":       float("inf"), # indefinite — needs user intervention
+    }
+
+    def __init__(self) -> None:
+        self._degraded: Dict[CLIType, Tuple[float, str]] = {}
+        # cli_type → (failed_at_timestamp, error_type)
+
+    def mark_failed(self, cli: CLIType, error_type: str) -> None:
+        """Mark CLI as degraded. error_type: 'rate_limit' | 'auth' | 'network'"""
+        self._degraded[cli] = (time.monotonic(), error_type)
+
+    def is_degraded(self, cli: CLIType) -> bool:
+        """Returns True if CLI is within its TTL window."""
+        if cli not in self._degraded:
+            return False
+        failed_at, error_type = self._degraded[cli]
+        if time.monotonic() - failed_at > self._TTL[error_type]:
+            del self._degraded[cli]
+            return False
+        return True
+
+    def clear(self, cli: CLIType) -> None:
+        """Manually clear degraded state (e.g., after user fixes auth)."""
+        self._degraded.pop(cli, None)
+```
+
+### Error Classification
+
+Errors caught in `client.py` are classified before marking degraded:
+
+| HTTP / stderr pattern | error_type | TTL |
+|----------------------|------------|-----|
+| `429`, `rate limit`, `usage limit` | `rate_limit` | 5 min |
+| `401`, `unauthorized`, `authentication` | `auth` | indefinite |
+| `ECONNREFUSED`, `timeout`, `network` | `network` | 1 min |
+
+### Routing Integration
+
+Health check runs as **step 0** — before any adaptive logic:
+
+```
+── Step 0: Health gate (all phases, every run) ───────────────────────────────
+0a. For each CLI in priority order: skip if health_monitor.is_degraded(cli)
+0b. If auth-degraded CLI skipped → print warning once per session:
+    "⚠ codex unavailable (auth error) — using ollama instead"
+0c. If ALL CLIs degraded → raise RuntimeError with actionable message
+```
+
+Error callback from `client.py` → `health_monitor.mark_failed(cli, error_type)` → next run skips automatically.
+
+### Constants
+
+```python
+class HealthConfig:
+    RATE_LIMIT_TTL = 300   # seconds
+    NETWORK_TTL    = 60    # seconds
+    AUTH_TTL       = -1    # sentinel: indefinite (float("inf") in code)
+```
+
+---
+
 ## Section 2: Adaptive Routing Logic
 
 ### Three-Phase Algorithm
 
 ```
+── Step 0: Health gate — skip degraded CLIs (see Section 1b) ─────────────────
+
 ── Phase 1: Priors (always active, runs 1+) ──────────────────────────────────
 1. Query cli_performance (includes pre-seeded priors) for task_type
 2. Filter: available CLIs only
@@ -172,9 +251,10 @@ Only shown when `--verbose` is passed:
 | File | Change |
 |------|--------|
 | `ai_delegate/memory.py` | Add `cli_performance` table, `record_cli_run()`, `store_rating()`, `get_cli_performance()` |
-| `ai_delegate/router.py` | Update `select_cli_for_task()` with adaptive override logic |
-| `ai_delegate/constants.py` | Add `AdaptiveConfig` class + `CLI_PRIORS` dict |
+| `ai_delegate/router.py` | Update `select_cli_for_task()` with adaptive override logic + add `CliHealthMonitor` class |
+| `ai_delegate/constants.py` | Add `AdaptiveConfig`, `HealthConfig` classes + `CLI_PRIORS` dict |
 | `ai_delegate/cli.py` | Add inline rating prompt + `rate` subcommand |
 | `tests/test_memory.py` | Tests for new memory methods |
-| `tests/test_router.py` | Tests for adaptive override logic |
+| `ai_delegate/client.py` | Classify errors → call `health_monitor.mark_failed()` on auth/rate-limit/network errors |
+| `tests/test_router.py` | Tests for adaptive override logic + health monitor TTL/fallback |
 | `tests/test_cli.py` | Tests for rating prompt + subcommand |
