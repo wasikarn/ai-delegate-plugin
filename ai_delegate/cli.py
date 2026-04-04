@@ -26,19 +26,18 @@ from .constants import (
     CLAUDE_MODELS,
 )
 
+# Reverse-lookup: model name → CLI prefix (built once at import time)
+_MODEL_CLI_MAP = {
+    **{m: "ollama" for m in OLLAMA_MODELS.values()},
+    **{m: "gemini" for m in GEMINI_MODELS.values()},
+    **{m: "codex"  for m in CODEX_MODELS.values()},
+    **{m: "claude" for m in CLAUDE_MODELS.values()},
+}
+
 
 def _format_model_display(model: str) -> str:
-    """Format model name with its CLI backend for display."""
-    cli_model_sets = [
-        ("ollama", OLLAMA_MODELS),
-        ("gemini", GEMINI_MODELS),
-        ("codex",  CODEX_MODELS),
-        ("claude", CLAUDE_MODELS),
-    ]
-    for cli, models in cli_model_sets:
-        if model in models.values():
-            return f"{cli} {model}"
-    return model
+    cli = _MODEL_CLI_MAP.get(model)
+    return f"{cli} {model}" if cli else model
 
 
 def create_task_config(task_type: str) -> TaskConfig:
