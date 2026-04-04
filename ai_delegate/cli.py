@@ -19,18 +19,29 @@ from .config import (
     DEFAULT_MODELS,
 )
 from .validation import validate_file_path
+from .constants import (
+    OLLAMA_MODELS,
+    GEMINI_MODELS,
+    CODEX_MODELS,
+    CLAUDE_MODELS,
+)
 
 
 def _format_model_display(model: str) -> str:
     """Format model name with its CLI backend for display."""
-    if "glm" in model or "kimi" in model:
+    ollama_models = set(OLLAMA_MODELS.values())
+    gemini_models = set(GEMINI_MODELS.values())
+    codex_models = set(CODEX_MODELS.values())
+    claude_models = set(CLAUDE_MODELS.values())
+
+    if model in ollama_models:
         return f"ollama {model}"
-    if model in ("haiku", "sonnet", "opus"):
-        return f"claude {model}"
-    if "gemini" in model:
+    if model in gemini_models:
         return f"gemini {model}"
-    if model in ("gpt-4o", "o3-mini"):
+    if model in codex_models:
         return f"codex {model}"
+    if model in claude_models:
+        return f"claude {model}"
     return model
 
 
@@ -266,7 +277,8 @@ Examples:
         elicit = flow.elicit
 
     # Always show which model/CLI will be used
-    effective_model = args.model or DEFAULT_MODELS.get(args.task_type, "glm-5:cloud")
+    from .constants import FALLBACK_MODEL
+    effective_model = args.model or DEFAULT_MODELS.get(args.task_type, FALLBACK_MODEL)
     print(f"Using: {_format_model_display(effective_model)}")
 
     # Run analysis
