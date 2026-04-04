@@ -511,8 +511,8 @@ class DebateOrchestrator:
             # Phase 2: Calculate consensus
             consensus = ConsensusCalculator.calculate(expert_results)
 
-            # Determine tier — force DEEP if all experts returned zero findings
-            if ForcedFindingValidator.should_force_deep(expert_results):
+            # Determine tier — force DEEP if all experts returned zero findings (AUTO mode only)
+            if tier == Tier.AUTO.value and ForcedFindingValidator.should_force_deep(expert_results):
                 logger.warning("All experts returned 0 findings — forcing DEEP tier for deeper analysis")
                 selected_tier = Tier.DEEP.value
             else:

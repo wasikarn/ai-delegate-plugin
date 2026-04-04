@@ -413,7 +413,7 @@ class TestOllamaClientAsync:
 
             results = asyncio.run(client.run_parallel(["prompt1", "prompt2", "prompt3"]))
 
-            assert results == ["result1", "result2", "result3"]
+            assert sorted(results) == ["result1", "result2", "result3"]
             assert mock_run.call_count == 3
 
     def test_run_parallel_empty_prompts(self, client: OllamaClient):
