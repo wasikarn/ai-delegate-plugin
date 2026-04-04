@@ -173,13 +173,9 @@ The plugin calls Ollama via the Anthropic SDK (not subprocess), so you need:
 ```bash
 # Start Ollama server
 ollama serve
-
-# Pull models (one-time)
-ollama pull glm-5:cloud
-ollama pull kimi-k2.5:cloud
 ```
 
-Cloud models (`:cloud` suffix) use a 180s timeout; local models use 60s.
+Cloud models (`:cloud` suffix — `glm-5:cloud`, `kimi-k2.5:cloud`) are proxied to the cloud and do **not** require `ollama pull`. They use a 180s timeout; local models use 60s.
 
 ---
 
