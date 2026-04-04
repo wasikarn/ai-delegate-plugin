@@ -33,7 +33,7 @@
 
 **Cost Savings:**
 
-- Experts run on DeepSeek/GLM (~$0.28/M tokens) instead of Claude ($3-15/M)
+- Experts run on GLM/Kimi via Ollama (~$1-5/M tokens) instead of Claude ($3-15/M)
 - Supervisor only runs final synthesis on premium model
 - 82-98% cost reduction vs single Claude analysis
 
@@ -49,8 +49,6 @@ Automatically selects the best available AI CLI and model for each task:
 - **Gemini** (gemini-2.0-flash, gemini-2.5-pro) - Fast, multimodal
 - **Codex** (gpt-4o, o3-mini) - Code generation, reasoning
 - **Claude** (sonnet, opus) - Fallback, safety
-- **DeepSeek** (deepseek-chat, deepseek-reasoner) - Budget option
-- **GLM** (glm-5:cloud) - Chinese market
 
 ### 💰 Token Optimization (82-98% Savings)
 
@@ -61,14 +59,14 @@ Automatically selects the best available AI CLI and model for each task:
 
 ### 🤖 Budget Mode (98% Cost Reduction)
 
-- Use DeepSeek/GLM for ultra-low-cost analysis
+- Use GLM/Kimi for ultra-low-cost analysis
 - Automatic fallback chain
 - Quality trade-off: ~40% lower benchmarks for ~5% of cost
 
 ### 🔄 Supervisor+Worker Pattern
 
 - Supervisor (Sonnet/Opus) for planning and coordination
-- Workers (Haiku/GLM/DeepSeek) for execution
+- Workers (Haiku/GLM/Kimi) for execution
 - Parallel task delegation
 - 98% cost reduction for delegated tasks
 
@@ -159,7 +157,7 @@ ai-delegate review src/main.py -d security,performance
 # Override model
 ai-delegate audit --model gemini-2.0-flash --file src/auth.py
 
-# Budget mode (DeepSeek)
+# Budget mode (GLM/Kimi)
 ai-delegate audit --budget --file src/auth.py
 ```
 
@@ -185,7 +183,7 @@ config = get_model_for_complexity(complexity)
 
 # Get model for complexity (budget mode)
 config = get_model_for_complexity(complexity, budget_mode=True)
-# Returns: {"model": "deepseek-chat", "cli": CLIType.DEEPSEEK, ...}
+# Returns: {"model": "glm-5:cloud", "cli": CLIType.OLLAMA, ...}
 
 # Auto-select CLI and model
 router = SmartRouter()
@@ -347,9 +345,9 @@ poetry.lock
 
 | Complexity | Lines | Model (Default) | Model (Budget) |
 |-----------|-------|-----------------|-----------------|
-| **LOW** | <100 | haiku | deepseek-chat |
-| **MEDIUM** | 100-500 | glm-5:cloud | deepseek-chat |
-| **HIGH** | >500 | sonnet | deepseek-reasoner |
+| **LOW** | <100 | haiku | glm-5:cloud |
+| **MEDIUM** | 100-500 | glm-5:cloud | glm-5:cloud |
+| **HIGH** | >500 | sonnet | kimi-k2.5:cloud |
 
 ### Task-Specific Rules
 
@@ -363,8 +361,8 @@ poetry.lock
 
 | Model | Input | Output | Use Case |
 |-------|-------|--------|----------|
-| **DeepSeek-V3** | $0.28/M | $0.42/M | Budget tasks |
-| **GLM-5** | ~$1/M | ~$5/M | Standard tasks |
+| **GLM-5** | ~$1/M | ~$5/M | Budget tasks |
+| **Kimi-K2.5** | ~$1/M | ~$5/M | Standard tasks |
 | **Claude Haiku** | $1/M | $5/M | Fast tasks |
 | **Claude Sonnet** | $3/M | $15/M | Premium coding |
 | **Claude Opus** | $5/M | $25/M | Architecture |
