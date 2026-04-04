@@ -41,3 +41,4 @@ Thumbs.db
 .env
 .venv/
 venv/
+.playwright-mcp

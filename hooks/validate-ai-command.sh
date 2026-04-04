@@ -18,6 +18,11 @@ fi
 # Valid tasks
 VALID_TASKS="audit|analyze|architecture|refactor|migrate|review"
 
+# Allow meta flags (--version, --help)
+if echo "$COMMAND" | grep -qE "ai-delegate\s+(--version|--help|-h|-V)"; then
+    exit 0
+fi
+
 # Check if command has valid task
 if ! echo "$COMMAND" | grep -qE "ai-delegate ($VALID_TASKS)"; then
     jq -n --arg cmd "$COMMAND" '{
