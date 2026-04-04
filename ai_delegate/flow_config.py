@@ -1,63 +1,83 @@
-"""Workflow mode configuration for ai-delegate analysis flows."""
-
+"""Workflow mode configuration for ai-delegate."""
 from dataclasses import dataclass
-from typing import Optional
+from enum import Enum
+from typing import Dict, Optional
 
 
-class FlowMode:
-    """Predefined workflow mode names."""
+class FlowMode(str, Enum):
     QUICK = "quick"
     STANDARD = "standard"
     BMAD = "bmad"
     ENTERPRISE = "enterprise"
 
-    ALL = [QUICK, STANDARD, BMAD, ENTERPRISE]
+    ALL = "all"  # not a real mode, kept for back-compat
+
+    @classmethod
+    def values(cls) -> list:
+        return [m.value for m in cls if m != cls.ALL]
 
 
 @dataclass
 class FlowConfig:
-    """Configuration for a workflow mode."""
-    mode: str
-    tier: str
-    elicit: Optional[str]
-    debate_rounds: int
-    description: str
+    mode: FlowMode
+    max_experts: Optional[int] = None
+    force_tier: Optional[str] = None
+    elicitation_enabled: bool = False
+    party_mode_enabled: bool = False
+    checkpoint_enabled: bool = False
+
+    @classmethod
+    def default(cls) -> "FlowConfig":
+        return cls(mode=FlowMode.STANDARD)
 
     @classmethod
     def from_mode(cls, mode: str) -> "FlowConfig":
-        """Create FlowConfig from a named mode."""
-        configs = {
-            FlowMode.QUICK: cls(
+        if mode == FlowMode.QUICK or mode == "quick":
+            return cls(
                 mode=FlowMode.QUICK,
-                tier="fast",
-                elicit=None,
-                debate_rounds=0,
-                description="Consensus-only, no debate (fastest)",
-            ),
-            FlowMode.STANDARD: cls(
-                mode=FlowMode.STANDARD,
-                tier="standard",
-                elicit=None,
-                debate_rounds=1,
-                description="Debate + adjudication (default quality)",
-            ),
-            FlowMode.BMAD: cls(
-                mode=FlowMode.BMAD,
-                tier="deep",
-                elicit="all",
-                debate_rounds=2,
-                description="Full BMAD elicitation + deep debate",
-            ),
-            FlowMode.ENTERPRISE: cls(
-                mode=FlowMode.ENTERPRISE,
-                tier="deep",
-                elicit="red-team",
-                debate_rounds=3,
-                description="Red-team elicitation + maximum debate rounds",
-            ),
-        }
-        if mode not in configs:
-            raise ValueError(
-                f"Unknown flow mode: {mode}. Valid: {', '.join(FlowMode.ALL)}"
+                max_experts=2,
+                force_tier="fast",
+                elicitation_enabled=False,
+                party_mode_enabled=False,
+                checkpoint_enabled=False,
             )
-        return configs[mode]
+        elif mode == FlowMode.STANDARD or mode == "standard":
+            return cls.default()
+        elif mode == FlowMode.BMAD or mode == "bmad":
+            return cls(
+                mode=FlowMode.BMAD,
+                max_experts=None,
+                force_tier=None,
+                elicitation_enabled=True,
+                party_mode_enabled=True,
+                checkpoint_enabled=True,
+            )
+        elif mode == FlowMode.ENTERPRISE or mode == "enterprise":
+            return cls(
+                mode=FlowMode.ENTERPRISE,
+                max_experts=None,
+                force_tier="deep",
+                elicitation_enabled=True,
+                party_mode_enabled=True,
+                checkpoint_enabled=True,
+            )
+        else:
+            valid = ", ".join(FlowMode.values())
+            raise ValueError(f"Unknown flow mode: {mode}. Valid: {valid}")
+
+    def limit_experts(self, experts: Dict[str, str]) -> Dict[str, str]:
+        """Limit expert count based on flow config."""
+        if self.max_experts is None:
+            return experts
+        return dict(list(experts.items())[: self.max_experts])
+
+    # Derived properties for backward-compat with CLI that uses tier/elicit
+    @property
+    def tier(self) -> str:
+        return self.force_tier or "auto"
+
+    @property
+    def elicit(self) -> Optional[str]:
+        if not self.elicitation_enabled:
+            return None
+        return "all" if self.mode == FlowMode.BMAD else "red-team"
