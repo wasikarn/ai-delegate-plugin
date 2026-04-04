@@ -4,7 +4,38 @@
 
 [![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/wasikarn/ai-delegate-plugin)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-164%20tests-97%25%20coverage-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-210%20tests-97%25%20coverage-brightgreen.svg)]()
+
+---
+
+## Idea & Concept
+
+**Problem:** Single AI agents miss issues that domain experts would catch. Running multiple full analyses is expensive.
+
+**Solution:** Multi-agent debate with domain experts running on budget models, coordinated by a supervisor.
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Input: code.py                                     │
+│                                                      │
+│  Smart Router → selects cheapest capable model       │
+│       ↓                                              │
+│  Expert Runner (parallel, budget models)            │
+│       ├── OWASP Expert → findings                    │
+│       ├── Auth Expert → findings                     │
+│       └── Input Expert → findings                    │
+│       ↓                                              │
+│  Consensus Calculator (95% agree = FAST tier)       │
+│       ↓                                              │
+│  Adjudicator (Sonnet) → final verdict               │
+└─────────────────────────────────────────────────────┘
+```
+
+**Cost Savings:**
+
+- Experts run on DeepSeek/GLM (~$0.28/M tokens) instead of Claude ($3-15/M)
+- Supervisor only runs final synthesis on premium model
+- 82-98% cost reduction vs single Claude analysis
 
 ---
 
