@@ -1,7 +1,7 @@
 {
   "name": "ai-delegate",
   "description": "Multi-agent AI delegation framework with smart CLI routing and domain expert debate system. Token optimization (82-98% savings), budget mode (98% cost reduction), complexity-based model selection, and supervisor+worker pattern.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "keywords": [
     "ai",

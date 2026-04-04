@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/wasikarn/ai-delegate-plugin)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-210%20tests-97%25%20coverage-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-300%20tests-97%25%20coverage-brightgreen.svg)]()
 
 ---
 
@@ -414,7 +414,7 @@ max_workers = WorkerConstants.DEFAULT_MAX_WORKERS  # 4
 pytest tests/ -v --cov=ai_delegate
 ```
 
-- **210 tests**, 97% coverage
+- **300 tests**, 97% coverage
 - `test_complexity.py` - Complexity detection tests
 - `test_supervisor.py` - Supervisor+Worker pattern tests
 - `test_router.py` - Smart router and model selection tests
