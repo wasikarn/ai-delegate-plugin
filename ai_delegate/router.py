@@ -11,6 +11,24 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
+from .constants import (
+    Models,
+    TokenLimits,
+    ComplexityThresholds,
+    QualityThresholds,
+    RetryConfig,
+    CLIPriority,
+    TaskTypes,
+    OLLAMA_MODELS,
+    GEMINI_MODELS,
+    CODEX_MODELS,
+    CLAUDE_MODELS,
+    DEEPSEEK_MODELS,
+    GLM_MODELS,
+    CLI_STRENGTHS,
+    FALLBACK_MODEL,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,132 +38,84 @@ class CLIType(Enum):
     GEMINI = "gemini"
     CODEX = "codex"
     CLAUDE = "claude"
-    DEEPSEEK = "deepseek"  # Budget option
-    GLM = "glm"            # Chinese market
+    DEEPSEEK = "deepseek"
+    GLM = "glm"
 
 
 class ComplexityLevel(Enum):
     """Content complexity levels for model selection."""
-    LOW = "low"        # Simple checks, <100 lines
-    MEDIUM = "medium"  # Standard analysis, <500 lines
-    HIGH = "high"      # Complex reasoning, architecture
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 @dataclass
 class CLIConfig:
     """Configuration for an AI CLI."""
     cli_type: CLIType
-    cli_name: str  # Command name
-    models: Dict[str, str]  # task_type -> model_name
-    strengths: List[str]  # What this CLI is good at
-    structured_output: bool  # Supports JSON output
-    fallback_priority: int  # Lower = higher priority
+    cli_name: str
+    models: Dict[str, str]
+    strengths: List[str]
+    structured_output: bool
+    fallback_priority: int
 
 
 # =============================================================================
-# CLI Configurations by Task Type
+# CLI Configurations
 # =============================================================================
 
-# Ollama models (cloud via Ollama)
 OLLAMA_CONFIG = CLIConfig(
     cli_type=CLIType.OLLAMA,
     cli_name="ollama",
-    models={
-        "audit": "glm-5:cloud",        # OWASP-focused, structured output
-        "analyze": "glm-5:cloud",        # Deep analysis, performance
-        "architecture": "kimi-k2.5:cloud",  # Reasoning, multi-perspective
-        "refactor": "kimi-k2.5:cloud",  # Complex reasoning
-        "migrate": "kimi-k2.5:cloud",    # Dependency analysis
-        "review": "kimi-k2.5:cloud",    # Multi-domain review
-    },
-    strengths=["structured_output", "security", "performance", "architecture"],
+    models=OLLAMA_MODELS,
+    strengths=CLI_STRENGTHS["ollama"],
     structured_output=True,
-    fallback_priority=1,
+    fallback_priority=CLIPriority.OLLAMA,
 )
 
-# Gemini CLI models
 GEMINI_CONFIG = CLIConfig(
     cli_type=CLIType.GEMINI,
     cli_name="gemini",
-    models={
-        "audit": "gemini-2.0-flash",      # Fast security analysis
-        "analyze": "gemini-2.0-flash",     # Performance analysis
-        "architecture": "gemini-2.5-pro",   # Deep architecture reasoning
-        "refactor": "gemini-2.0-flash",    # Refactoring suggestions
-        "migrate": "gemini-2.5-pro",        # Migration analysis
-        "review": "gemini-2.5-pro",        # Multi-domain review
-    },
-    strengths=["fast", "reasoning", "multimodal"],
+    models=GEMINI_MODELS,
+    strengths=CLI_STRENGTHS["gemini"],
     structured_output=True,
-    fallback_priority=2,
+    fallback_priority=CLIPriority.GEMINI,
 )
 
-# Codex CLI models
 CODEX_CONFIG = CLIConfig(
     cli_type=CLIType.CODEX,
     cli_name="codex",
-    models={
-        "audit": "gpt-4o",              # Security analysis
-        "analyze": "gpt-4o",             # Performance
-        "architecture": "o3-mini",       # Architecture reasoning
-        "refactor": "gpt-4o",           # Refactoring
-        "migrate": "o3-mini",            # Migration analysis
-        "review": "o3-mini",            # Multi-domain review
-    },
-    strengths=["code_generation", "reasoning", "documentation"],
+    models=CODEX_MODELS,
+    strengths=CLI_STRENGTHS["codex"],
     structured_output=True,
-    fallback_priority=3,
+    fallback_priority=CLIPriority.CODEX,
 )
 
-# Claude CLI models (fallback)
 CLAUDE_CONFIG = CLIConfig(
     cli_type=CLIType.CLAUDE,
     cli_name="claude",
-    models={
-        "audit": "sonnet",              # Security analysis
-        "analyze": "sonnet",             # Performance
-        "architecture": "opus",          # Architecture (needs deep reasoning)
-        "refactor": "sonnet",           # Refactoring
-        "migrate": "opus",               # Migration analysis
-        "review": "sonnet",             # Multi-domain review
-    },
-    strengths=["reasoning", "structured_output", "safety"],
-    structured_output=False,  # Claude CLI doesn't have --format json
-    fallback_priority=4,       # Always last resort
+    models=CLAUDE_MODELS,
+    strengths=CLI_STRENGTHS["claude"],
+    structured_output=False,
+    fallback_priority=CLIPriority.CLAUDE,
 )
 
-# DeepSeek CLI (budget option - ultra low cost)
 DEEPSEEK_CONFIG = CLIConfig(
     cli_type=CLIType.DEEPSEEK,
     cli_name="deepseek",
-    models={
-        "audit": "deepseek-chat",       # Budget security analysis
-        "analyze": "deepseek-chat",      # Budget performance
-        "architecture": "deepseek-reasoner",  # Budget reasoning
-        "refactor": "deepseek-chat",
-        "migrate": "deepseek-reasoner",
-        "review": "deepseek-chat",
-    },
-    strengths=["budget", "fast", "reasoning"],
+    models=DEEPSEEK_MODELS,
+    strengths=CLI_STRENGTHS["deepseek"],
     structured_output=True,
-    fallback_priority=5,  # Budget option
+    fallback_priority=CLIPriority.DEEPSEEK,
 )
 
-# GLM CLI (Chinese market, cost-effective)
 GLM_CONFIG = CLIConfig(
     cli_type=CLIType.GLM,
     cli_name="glm",
-    models={
-        "audit": "glm-5:cloud",         # Already in Ollama
-        "analyze": "glm-5:cloud",
-        "architecture": "glm-5:cloud",
-        "refactor": "glm-5:cloud",
-        "migrate": "glm-5:cloud",
-        "review": "glm-5:cloud",
-    },
-    strengths=["chinese_market", "structured_output", "cloud"],
+    models=GLM_MODELS,
+    strengths=CLI_STRENGTHS["glm"],
     structured_output=True,
-    fallback_priority=6,  # Alternative option
+    fallback_priority=CLIPriority.GLM,
 )
 
 
@@ -153,29 +123,27 @@ GLM_CONFIG = CLIConfig(
 # Complexity-Based Model Selection
 # =============================================================================
 
-# Model selection by complexity (50-70% cost savings)
-# Budget mode uses DeepSeek for ultra-low cost
 COMPLEXITY_MODEL_MAP = {
     ComplexityLevel.LOW: {
-        "model": "haiku",
+        "model": Models.CLAUDE_HAIKU,
         "cli": CLIType.CLAUDE,
-        "max_tokens": 2000,
+        "max_tokens": TokenLimits.LOW_MAX_TOKENS,
         "reason": "Simple checks, fast response",
-        "budget_model": "deepseek-chat",  # Budget alternative
+        "budget_model": Models.DEEPSEEK_CHAT,
     },
     ComplexityLevel.MEDIUM: {
-        "model": "glm-5:cloud",
+        "model": Models.GLM_5_CLOUD,
         "cli": CLIType.OLLAMA,
-        "max_tokens": 4000,
+        "max_tokens": TokenLimits.MEDIUM_MAX_TOKENS,
         "reason": "Standard analysis, cost-effective",
-        "budget_model": "deepseek-chat",  # Budget alternative
+        "budget_model": Models.DEEPSEEK_CHAT,
     },
     ComplexityLevel.HIGH: {
-        "model": "sonnet",
+        "model": Models.CLAUDE_SONNET,
         "cli": CLIType.CLAUDE,
-        "max_tokens": 8000,
+        "max_tokens": TokenLimits.HIGH_MAX_TOKENS,
         "reason": "Complex reasoning, high accuracy",
-        "budget_model": "deepseek-reasoner",  # Budget alternative
+        "budget_model": Models.DEEPSEEK_REASONER,
     },
 }
 
@@ -197,15 +165,15 @@ def detect_complexity(content: str, task_type: str) -> ComplexityLevel:
     lines = content.count('\n') + 1
 
     # Architecture always needs high complexity
-    if task_type == "architecture":
+    if task_type == TaskTypes.ARCHITECTURE:
         return ComplexityLevel.HIGH
 
     # Simple single-file checks
-    if lines < 100 and task_type in ["audit"]:
+    if lines < ComplexityThresholds.LOW_LINES and task_type in [TaskTypes.AUDIT]:
         return ComplexityLevel.LOW
 
     # Medium complexity
-    if lines < 500:
+    if lines < ComplexityThresholds.MEDIUM_LINES:
         return ComplexityLevel.MEDIUM
 
     # Complex
@@ -239,12 +207,6 @@ def get_model_for_complexity(complexity: ComplexityLevel, budget_mode: bool = Fa
 class SmartRouter:
     """
     Intelligently routes tasks to the best available CLI and model.
-
-    Detection order:
-    1. Check which CLIs are installed
-    2. Select best CLI for task type
-    3. Choose appropriate model for the CLI
-    4. Fall back to next available CLI if needed
     """
 
     def __init__(self):
@@ -283,7 +245,7 @@ class SmartRouter:
         Select the best CLI and model for a task.
 
         Args:
-            task_type: Task type (audit, analyze, architecture, etc.)
+            task_type: Task type (audit, analyze, etc.)
             prefer_structured_output: Prefer CLIs that support JSON output
 
         Returns:
@@ -293,40 +255,35 @@ class SmartRouter:
             RuntimeError: If no CLI is available
         """
         # Priority order based on task characteristics
-        if task_type == "audit":
-            # Security benefits from Ollama's structured output
+        if task_type == TaskTypes.AUDIT:
             priority_order = [
                 (CLIType.OLLAMA, OLLAMA_CONFIG),
                 (CLIType.GEMINI, GEMINI_CONFIG),
                 (CLIType.CODEX, CODEX_CONFIG),
                 (CLIType.CLAUDE, CLAUDE_CONFIG),
             ]
-        elif task_type == "architecture":
-            # Architecture needs deep reasoning
+        elif task_type == TaskTypes.ARCHITECTURE:
             priority_order = [
-                (CLIType.CODEX, CODEX_CONFIG),   # o3-mini for reasoning
-                (CLIType.OLLAMA, OLLAMA_CONFIG), # kimi-k2.5 for reasoning
-                (CLIType.GEMINI, GEMINI_CONFIG), # gemini-2.5-pro
-                (CLIType.CLAUDE, CLAUDE_CONFIG), # opus
+                (CLIType.CODEX, CODEX_CONFIG),
+                (CLIType.OLLAMA, OLLAMA_CONFIG),
+                (CLIType.GEMINI, GEMINI_CONFIG),
+                (CLIType.CLAUDE, CLAUDE_CONFIG),
             ]
-        elif task_type == "analyze":
-            # Performance needs structured output
+        elif task_type == TaskTypes.ANALYZE:
             priority_order = [
                 (CLIType.OLLAMA, OLLAMA_CONFIG),
                 (CLIType.GEMINI, GEMINI_CONFIG),
                 (CLIType.CODEX, CODEX_CONFIG),
                 (CLIType.CLAUDE, CLAUDE_CONFIG),
             ]
-        elif task_type == "review":
-            # Multi-domain needs balanced approach
+        elif task_type == TaskTypes.REVIEW:
             priority_order = [
-                (CLIType.OLLAMA, OLLAMA_CONFIG),   # kimi for multi-perspective
-                (CLIType.CODEX, CODEX_CONFIG),     # o3-mini for reasoning
+                (CLIType.OLLAMA, OLLAMA_CONFIG),
+                (CLIType.CODEX, CODEX_CONFIG),
                 (CLIType.GEMINI, GEMINI_CONFIG),
                 (CLIType.CLAUDE, CLAUDE_CONFIG),
             ]
         else:
-            # Default priority
             priority_order = [
                 (CLIType.OLLAMA, OLLAMA_CONFIG),
                 (CLIType.GEMINI, GEMINI_CONFIG),
@@ -340,21 +297,20 @@ class SmartRouter:
                 continue
 
             if prefer_structured_output and not config.structured_output:
-                # Still consider it if it's the last option
                 if len(self.get_available_clis()) == 1:
-                    model = config.models.get(task_type, "sonnet")
+                    model = config.models.get(task_type, FALLBACK_MODEL)
                     logger.info(f"Selected {cli_type.value} with model {model}")
                     return config, model
                 continue
 
-            model = config.models.get(task_type, "sonnet")
+            model = config.models.get(task_type, FALLBACK_MODEL)
             logger.info(f"Selected {cli_type.value} with model {model} for task {task_type}")
             return config, model
 
         # Fallback: use first available CLI
         for cli_type, config in priority_order:
             if self.is_available(cli_type):
-                model = config.models.get(task_type, "sonnet")
+                model = config.models.get(task_type, FALLBACK_MODEL)
                 logger.warning(f"Using fallback CLI {cli_type.value} with model {model}")
                 return config, model
 
@@ -381,7 +337,7 @@ class SmartRouter:
                     CLIType.CODEX: CODEX_CONFIG,
                     CLIType.CLAUDE: CLAUDE_CONFIG,
                 }[cli_type]
-                model = config.models.get(task_type, "sonnet")
+                model = config.models.get(task_type, FALLBACK_MODEL)
                 chain.append((cli_type, model))
         return chain
 
@@ -410,13 +366,15 @@ class SmartRouter:
             CLIType.GEMINI: GEMINI_CONFIG,
             CLIType.CODEX: CODEX_CONFIG,
             CLIType.CLAUDE: CLAUDE_CONFIG,
+            CLIType.DEEPSEEK: DEEPSEEK_CONFIG,
+            CLIType.GLM: GLM_CONFIG,
         }
 
         config = configs.get(cli_type)
         if not config:
-            return "sonnet"
+            return FALLBACK_MODEL
 
-        return config.models.get(task_type, "sonnet")
+        return config.models.get(task_type, FALLBACK_MODEL)
 
 
 # Global router instance
@@ -450,7 +408,6 @@ def select_cli_and_model(
     router = get_router()
 
     if override_model:
-        # Use override model with first available CLI
         for cli_type in [CLIType.OLLAMA, CLIType.GEMINI, CLIType.CODEX, CLIType.CLAUDE]:
             if router.is_available(cli_type):
                 return cli_type, override_model

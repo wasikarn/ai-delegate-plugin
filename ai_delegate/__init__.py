@@ -41,6 +41,16 @@ from .supervisor import (
     TaskResult,
     create_supervisor,
 )
+from .constants import (
+    Models,
+    TokenLimits,
+    ComplexityThresholds,
+    QualityThresholds,
+    RetryConfig,
+    CLIPriority,
+    TaskTypes,
+    ExpertDomains,
+)
 
 __all__ = [
     # Clients
@@ -73,6 +83,15 @@ __all__ = [
     "WorkerConfig",
     "TaskResult",
     "create_supervisor",
+    # Constants
+    "Models",
+    "TokenLimits",
+    "ComplexityThresholds",
+    "QualityThresholds",
+    "RetryConfig",
+    "CLIPriority",
+    "TaskTypes",
+    "ExpertDomains",
     # Config
     "TASK_DISPLAY_NAMES",
     "TASK_EXPERT_DESCRIPTIONS",

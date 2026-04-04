@@ -9,22 +9,27 @@ Research insight:
 
 import logging
 from typing import Dict, List, Optional, Callable, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .router import ComplexityLevel, get_model_for_complexity, CLIType
+from .router import ComplexityLevel, CLIType
+from .constants import (
+    Models,
+    TokenLimits,
+    TaskTypes,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class WorkerType(Enum):
     """Worker types for distributed tasks."""
-    CODE = "code"          # Code generation/analysis
-    SEARCH = "search"      # Documentation search
-    REVIEW = "review"      # Code review
-    DOCS = "docs"          # Documentation generation
-    TEST = "test"          # Test generation
+    CODE = "code"
+    SEARCH = "search"
+    REVIEW = "review"
+    DOCS = "docs"
+    TEST = "test"
 
 
 @dataclass
@@ -33,7 +38,7 @@ class WorkerConfig:
     worker_type: WorkerType
     model: str
     cli: CLIType
-    max_tokens: int = 4000
+    max_tokens: int = TokenLimits.CODE_MAX_TOKENS
     budget_mode: bool = False
 
 
@@ -51,33 +56,33 @@ class TaskResult:
 DEFAULT_WORKERS = {
     WorkerType.CODE: WorkerConfig(
         worker_type=WorkerType.CODE,
-        model="glm-5:cloud",
+        model=Models.GLM_5_CLOUD,
         cli=CLIType.OLLAMA,
-        max_tokens=4000,
+        max_tokens=TokenLimits.CODE_MAX_TOKENS,
     ),
     WorkerType.SEARCH: WorkerConfig(
         worker_type=WorkerType.SEARCH,
-        model="gemini-2.0-flash",
+        model=Models.GEMINI_20_FLASH,
         cli=CLIType.GEMINI,
-        max_tokens=2000,
+        max_tokens=TokenLimits.SEARCH_MAX_TOKENS,
     ),
     WorkerType.REVIEW: WorkerConfig(
         worker_type=WorkerType.REVIEW,
-        model="haiku",
+        model=Models.CLAUDE_HAIKU,
         cli=CLIType.CLAUDE,
-        max_tokens=3000,
+        max_tokens=TokenLimits.REVIEW_MAX_TOKENS,
     ),
     WorkerType.DOCS: WorkerConfig(
         worker_type=WorkerType.DOCS,
-        model="gemini-2.0-flash",
+        model=Models.GEMINI_20_FLASH,
         cli=CLIType.GEMINI,
-        max_tokens=4000,
+        max_tokens=TokenLimits.DOCS_MAX_TOKENS,
     ),
     WorkerType.TEST: WorkerConfig(
         worker_type=WorkerType.TEST,
-        model="haiku",
+        model=Models.CLAUDE_HAIKU,
         cli=CLIType.CLAUDE,
-        max_tokens=3000,
+        max_tokens=TokenLimits.TEST_MAX_TOKENS,
     ),
 }
 
@@ -85,37 +90,37 @@ DEFAULT_WORKERS = {
 BUDGET_WORKERS = {
     WorkerType.CODE: WorkerConfig(
         worker_type=WorkerType.CODE,
-        model="deepseek-chat",
+        model=Models.DEEPSEEK_CHAT,
         cli=CLIType.DEEPSEEK,
-        max_tokens=4000,
+        max_tokens=TokenLimits.CODE_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.SEARCH: WorkerConfig(
         worker_type=WorkerType.SEARCH,
-        model="deepseek-chat",
+        model=Models.DEEPSEEK_CHAT,
         cli=CLIType.DEEPSEEK,
-        max_tokens=2000,
+        max_tokens=TokenLimits.SEARCH_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.REVIEW: WorkerConfig(
         worker_type=WorkerType.REVIEW,
-        model="deepseek-chat",
+        model=Models.DEEPSEEK_CHAT,
         cli=CLIType.DEEPSEEK,
-        max_tokens=3000,
+        max_tokens=TokenLimits.REVIEW_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.DOCS: WorkerConfig(
         worker_type=WorkerType.DOCS,
-        model="deepseek-chat",
+        model=Models.DEEPSEEK_CHAT,
         cli=CLIType.DEEPSEEK,
-        max_tokens=4000,
+        max_tokens=TokenLimits.DOCS_MAX_TOKENS,
         budget_mode=True,
     ),
     WorkerType.TEST: WorkerConfig(
         worker_type=WorkerType.TEST,
-        model="deepseek-chat",
+        model=Models.DEEPSEEK_CHAT,
         cli=CLIType.DEEPSEEK,
-        max_tokens=3000,
+        max_tokens=TokenLimits.TEST_MAX_TOKENS,
         budget_mode=True,
     ),
 }
@@ -124,13 +129,11 @@ BUDGET_WORKERS = {
 class Supervisor:
     """
     Supervisor for coordinating worker tasks.
-
-    Uses Sonnet/Opus for planning, delegates to workers for execution.
     """
 
     def __init__(
         self,
-        model: str = "sonnet",
+        model: str = Models.CLAUDE_SONNET,
         cli: CLIType = CLIType.CLAUDE,
         budget_mode: bool = False,
         max_workers: int = 4,
@@ -238,7 +241,7 @@ class Supervisor:
 
 
 def create_supervisor(
-    model: str = "sonnet",
+    model: str = Models.CLAUDE_SONNET,
     budget_mode: bool = False,
     max_workers: int = 4
 ) -> Supervisor:
