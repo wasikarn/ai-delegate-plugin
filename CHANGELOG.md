@@ -5,14 +5,20 @@ All notable changes to ai-delegate-plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.4.0] - 2026-04-04
+## [0.0.1] - 2026-04-04
 
 ### Added
+
+#### Core Framework
+
+- **Smart Router** - Multi-CLI support (Ollama, Gemini, Codex, Claude, DeepSeek, GLM)
+- **Debate Orchestrator** - Multi-agent parallel analysis with consensus calculation
+- **Domain Experts** - Security (OWASP, Auth, Input), Performance, Architecture, Refactor, Migrate
 
 #### Token Optimization (82-98% startup savings)
 
 - **Progressive disclosure SKILL.md** - Slimmed from 127 to 67 lines (~490 tokens)
-- **Reference files** - Split into setup.md, domain-experts.md, quality-tiers.md, python-api.md
+- **Reference files** - setup.md, domain-experts.md, quality-tiers.md, python-api.md
 - **.claudeignore** - 20-40% input token reduction
 
 #### Complexity-Based Model Selection (50-70% cost savings)
@@ -30,72 +36,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Supervisor+Worker Pattern
 
-- **supervisor.py** - New module for distributed task execution
+- **supervisor.py** - Distributed task execution
 - **WorkerType enum** - CODE, SEARCH, REVIEW, DOCS, TEST
 - **WorkerConfig** - Worker configuration dataclass
 - **TaskResult** - Task execution result
 - **create_supervisor()** - Factory function
+
+#### Hooks System
+
+- **SessionStart** - Auto-install Python package
+- **UserPromptSubmit** - Keyword detection for analysis tasks
+- **PreToolUse/Bash** - Validate ai-delegate commands
+- **PostToolUse/Write|Edit** - Auto-audit sensitive files
+- **SubagentStart** - Inject domain context
+- **SubagentStop** - Quality gate for expert outputs
+- **Stop** - Analysis summary generation
+- **PostCompact** - Restore debate context
 
 #### Cache-Friendly Hooks (76-90% cache hit rate)
 
 - **expert-context.sh** - Static prompts for better caching
 - **Output format** - Summary at top to avoid "lost in middle"
 
-### Changed
+### Documentation
 
-- **router.py** - Added DeepSeek/GLM detection, complexity detection
-- ****init**.py** - Exported new modules (ComplexityLevel, Supervisor, etc.)
-- **SKILL.md** - Restructured with progressive disclosure
+- **docs/architecture-flow.md** - Architecture flow diagram
+- **docs/research-application.md** - Token optimization research summary
+- **docs/budget-mode.md** - Budget mode documentation
+- **skills/ai-delegate/references/** - Detailed reference documentation
 
 ### Tests
 
 - **test_complexity.py** - 25 tests for complexity detection and model selection
 - **test_supervisor.py** - 30 tests for Supervisor+Worker pattern
-
-### Documentation
-
-- **research-application.md** - Token optimization research summary
-- **budget-mode.md** - Complete budget mode documentation
-- **architecture-flow.md** - Architecture flow diagram
+- **test_*.py** - 164 tests, 97% coverage
 
 ---
 
-## [2.3.0] - 2026-04-03
+## Future Releases
 
-### Added
+### [0.1.0] - Planned
 
-- Smart router for CLI and model selection
-- Domain experts (OWASP, Auth, Input for security)
-- Quality tiers (FAST, STANDARD, DEEP)
-- Debate orchestrator with consensus calculation
+- CLI installer (pip install ai-delegate)
+- Web dashboard for analysis history
+- Custom expert configuration
 
----
+### [1.0.0] - Planned
 
-## [2.2.0] - 2026-04-02
-
-### Added
-
-- Expert context injection hooks
-- Quality gates for expert outputs
-- Auto-audit for sensitive files
-- Analysis summary generation
-
----
-
-## [2.1.0] - 2026-04-01
-
-### Added
-
-- Initial plugin structure
-- Skills architecture
-- Hook system (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStart, SubagentStop, Stop, PostCompact)
-- Basic CLI commands
-
----
-
-## [2.0.0] - 2026-03-31
-
-### Added
-
-- Project initialization
-- Core architecture design
+- Stable API
+- Full documentation
+- Performance benchmarks
