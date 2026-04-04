@@ -33,6 +33,7 @@ def run_analysis(
     model: Optional[str] = None,
     verbose: bool = False,
     elicit: Optional[str] = None,
+    mode: str = "solo",
 ) -> dict:
     """
     Run multi-expert analysis.
@@ -60,15 +61,18 @@ def run_analysis(
         verbose=verbose,
     )
 
-    # Create orchestrator
-    orchestrator = DebateOrchestrator(
-        client=client,
-        task_config=config,
-        verbose=verbose,
-    )
-
-    # Run analysis
-    verdict = orchestrator.analyze(content, tier=tier, elicit=elicit)
+    if mode == "party":
+        from .party_mode import PartyDebate
+        party = PartyDebate(client=client, task_config=config, verbose=verbose)
+        verdict = party.run(content=content)
+    else:
+        # Create orchestrator
+        orchestrator = DebateOrchestrator(
+            client=client,
+            task_config=config,
+            verbose=verbose,
+        )
+        verdict = orchestrator.analyze(content, tier=tier, elicit=elicit)
 
     return verdict.to_dict()
 
@@ -148,6 +152,12 @@ Examples:
         choices=["pre-mortem", "first-principles", "inversion", "red-team", "constraint-removal", "all"],
         help="Apply BMAD elicitation lens after initial analysis for deeper findings",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["solo", "party"],
+        default="solo",
+        help="Debate mode: solo (parallel+consensus) or party (multi-turn adversarial)",
+    )
 
     args = parser.parse_args()
 
@@ -189,6 +199,7 @@ Examples:
             model=args.model,
             verbose=args.verbose,
             elicit=args.elicit,
+            mode=args.mode,
         )
 
         if args.output == "json":
