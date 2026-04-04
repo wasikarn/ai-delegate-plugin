@@ -603,12 +603,14 @@ class DebateOrchestrator:
 
         # Use consensus-based selection (score is 0-1, percentage is 0-100)
         consensus_pct = consensus.percentage
-        if consensus_pct >= CONSENSUS_THRESHOLD_FAST:
-            return Tier.FAST.value
-        elif consensus_pct >= CONSENSUS_THRESHOLD_STANDARD:
-            return Tier.STANDARD.value
-        else:
-            return Tier.DEEP.value
+        tier_thresholds = [
+            (CONSENSUS_THRESHOLD_FAST, Tier.FAST.value),
+            (CONSENSUS_THRESHOLD_STANDARD, Tier.STANDARD.value),
+        ]
+        for threshold, tier in tier_thresholds:
+            if consensus_pct >= threshold:
+                return tier
+        return Tier.DEEP.value
 
     def _create_verdict_from_consensus(
         self,

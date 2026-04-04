@@ -243,41 +243,29 @@ class SmartRouter:
             RuntimeError: If no CLI is available
         """
         # Priority order based on task characteristics
-        if task_type == TaskTypes.AUDIT:
-            priority_order = [
+        _default = [
+            (CLIType.OLLAMA, OLLAMA_CONFIG),
+            (CLIType.GEMINI, GEMINI_CONFIG),
+            (CLIType.CODEX, CODEX_CONFIG),
+            (CLIType.CLAUDE, CLAUDE_CONFIG),
+        ]
+        _task_priority_map = {
+            TaskTypes.AUDIT: _default,
+            TaskTypes.ANALYZE: _default,
+            TaskTypes.ARCHITECTURE: [
+                (CLIType.CODEX, CODEX_CONFIG),
                 (CLIType.OLLAMA, OLLAMA_CONFIG),
                 (CLIType.GEMINI, GEMINI_CONFIG),
-                (CLIType.CODEX, CODEX_CONFIG),
                 (CLIType.CLAUDE, CLAUDE_CONFIG),
-            ]
-        elif task_type == TaskTypes.ARCHITECTURE:
-            priority_order = [
-                (CLIType.CODEX, CODEX_CONFIG),
-                (CLIType.OLLAMA, OLLAMA_CONFIG),
-                (CLIType.GEMINI, GEMINI_CONFIG),
-                (CLIType.CLAUDE, CLAUDE_CONFIG),
-            ]
-        elif task_type == TaskTypes.ANALYZE:
-            priority_order = [
-                (CLIType.OLLAMA, OLLAMA_CONFIG),
-                (CLIType.GEMINI, GEMINI_CONFIG),
-                (CLIType.CODEX, CODEX_CONFIG),
-                (CLIType.CLAUDE, CLAUDE_CONFIG),
-            ]
-        elif task_type == TaskTypes.REVIEW:
-            priority_order = [
+            ],
+            TaskTypes.REVIEW: [
                 (CLIType.OLLAMA, OLLAMA_CONFIG),
                 (CLIType.CODEX, CODEX_CONFIG),
                 (CLIType.GEMINI, GEMINI_CONFIG),
                 (CLIType.CLAUDE, CLAUDE_CONFIG),
-            ]
-        else:
-            priority_order = [
-                (CLIType.OLLAMA, OLLAMA_CONFIG),
-                (CLIType.GEMINI, GEMINI_CONFIG),
-                (CLIType.CODEX, CODEX_CONFIG),
-                (CLIType.CLAUDE, CLAUDE_CONFIG),
-            ]
+            ],
+        }
+        priority_order = _task_priority_map.get(task_type, _default)
 
         # Filter by availability and structured output preference
         for cli_type, config in priority_order:

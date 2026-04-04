@@ -302,17 +302,12 @@ class OllamaClient(AIClient):
             response_parser: Optional ResponseParser (for testing)
         """
         # Validate model names
-        model_result = validate_model_name(model)
-        if not model_result.valid:
-            raise ValueError(f"Invalid model name: {model_result.error}")
-        if model_result.warning:
-            logger.warning(model_result.warning)
-
-        fallback_result = validate_model_name(fallback_model)
-        if not fallback_result.valid:
-            raise ValueError(f"Invalid fallback_model name: {fallback_result.error}")
-        if fallback_result.warning:
-            logger.warning(fallback_result.warning)
+        for param_name, model_value in [("model", model), ("fallback_model", fallback_model)]:
+            result = validate_model_name(model_value)
+            if not result.valid:
+                raise ValueError(f"Invalid {param_name} name: {result.error}")
+            if result.warning:
+                logger.warning(result.warning)
 
         # Configuration
         self.model = model
