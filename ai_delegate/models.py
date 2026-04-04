@@ -200,7 +200,12 @@ class TaskConfig:
     # None = full peer visibility. Integer k = each expert sees k peers (round-robin).
 
     @classmethod
-    def from_task_type(cls, task_type: str) -> "TaskConfig":
+    def from_task_type(
+        cls,
+        task_type: str,
+        expert_models: Optional[Dict[str, str]] = None,
+        sparse_topology_k: Optional[int] = None,
+    ) -> "TaskConfig":
         """Create task config from task type."""
         from .config import (
             TASK_DISPLAY_NAMES,
@@ -234,4 +239,6 @@ class TaskConfig:
             output_format=TASK_OUTPUT_FORMATS.get(task_type, ""),
             default_model=DEFAULT_MODELS.get(task_type, FALLBACK_MODEL),
             always_deep=task_type in TaskTypes.ALWAYS_DEEP,
+            expert_models=expert_models or {},
+            sparse_topology_k=sparse_topology_k,
         )

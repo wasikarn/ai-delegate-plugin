@@ -259,6 +259,27 @@ class TestTaskConfig:
         with pytest.raises(ValueError, match="Unknown task type"):
             TaskConfig.from_task_type("invalid")
 
+    def test_from_task_type_accepts_expert_models(self):
+        """from_task_type should pass expert_models to constructor."""
+        config = TaskConfig.from_task_type("audit", expert_models={"owasp": "gpt-4o"})
+        assert config.expert_models == {"owasp": "gpt-4o"}
+
+    def test_from_task_type_accepts_sparse_topology_k(self):
+        """from_task_type should pass sparse_topology_k to constructor."""
+        config = TaskConfig.from_task_type("audit", sparse_topology_k=2)
+        assert config.sparse_topology_k == 2
+
+    def test_from_task_type_defaults_preserve_existing_behavior(self):
+        """from_task_type with no overrides should behave identically to before."""
+        config = TaskConfig.from_task_type("audit")
+        assert config.expert_models == {}
+        assert config.sparse_topology_k is None
+
+    def test_from_task_type_sparse_topology_k_none_preserved(self):
+        """None for sparse_topology_k means full topology — must not become 0 or {}."""
+        config = TaskConfig.from_task_type("audit", sparse_topology_k=None)
+        assert config.sparse_topology_k is None
+
 
 class TestTier:
     """Tests for Tier enum."""
