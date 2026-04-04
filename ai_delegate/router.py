@@ -8,9 +8,12 @@ CLI and model combination for each task type.
 import time
 import shutil
 import logging
-from typing import Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
+
+if TYPE_CHECKING:
+    from .memory import AnalysisMemory
 
 from .constants import (
     Models,
@@ -28,6 +31,7 @@ from .constants import (
     CLI_STRENGTHS,
     FALLBACK_MODEL,
     HealthConfig,
+    AdaptiveConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -279,13 +283,24 @@ class SmartRouter:
         self,
         task_type: str,
         prefer_structured_output: bool = True,
+        memory: Optional["AnalysisMemory"] = None,
+        no_adaptive: bool = False,
     ) -> Tuple[CLIConfig, str]:
         """
         Select the best CLI and model for a task.
 
+        Phases (when memory provided and not no_adaptive):
+          0. Health gate: skip degraded CLIs
+          1. Priors: sort by win_rate from cli_performance (decisive from run 1)
+          2. Streak correction (runs 3+): lock winning streak, skip losing CLI
+          3. Win rate override (runs 10+): permanent override if delta >=15pp
+          Anti-thrash: >=3 distinct CLIs in last 3 runs -> hold static
+
         Args:
             task_type: Task type (audit, analyze, etc.)
             prefer_structured_output: Prefer CLIs that support JSON output
+            memory: AnalysisMemory for adaptive routing (None = static only)
+            no_adaptive: If True, use static priority map only
 
         Returns:
             Tuple of (CLIConfig, model_name)
@@ -293,7 +308,6 @@ class SmartRouter:
         Raises:
             RuntimeError: If no CLI is available
         """
-        # Priority order based on task characteristics
         _default = [
             (CLIType.OLLAMA, OLLAMA_CONFIG),
             (CLIType.GEMINI, GEMINI_CONFIG),
@@ -318,41 +332,119 @@ class SmartRouter:
         }
         priority_order = _task_priority_map.get(task_type, _default)
 
-        # Filter by availability and health gate (Step 0) and structured output preference
-        for cli_type, config in priority_order:
-            if not self.is_available(cli_type):
-                continue
-            # Step 0: skip degraded CLIs; warn once per session for auth errors
-            if self.health_monitor.is_degraded(cli_type):
-                failed_state = self.health_monitor._degraded.get(cli_type)
-                if failed_state and failed_state[1] == "auth":
-                    if self.health_monitor.should_warn_auth(cli_type):
-                        logger.warning(
-                            f"⚠ {cli_type.value} unavailable (auth error) — skipping"
-                        )
-                continue
+        # Step 0: Health gate — installed + not degraded
+        available = [
+            (cli_type, config)
+            for cli_type, config in priority_order
+            if self.is_available(cli_type) and not self.health_monitor.is_degraded(cli_type)
+        ]
 
-            if prefer_structured_output and not config.structured_output:
-                if len(self.get_available_clis()) == 1:
-                    model = config.models.get(task_type, FALLBACK_MODEL)
-                    logger.info(f"Selected {cli_type.value} with model {model}")
-                    return config, model
-                continue
+        # Warn once per session for auth-degraded CLIs
+        for cli_type, _ in priority_order:
+            if self.is_available(cli_type) and self.health_monitor.is_degraded(cli_type):
+                state = self.health_monitor._degraded.get(cli_type)
+                if state and state[1] == "auth" and self.health_monitor.should_warn_auth(cli_type):
+                    logger.warning(f"⚠ {cli_type.value} unavailable (auth error) — skipping")
 
-            model = config.models.get(task_type, FALLBACK_MODEL)
-            logger.info(f"Selected {cli_type.value} with model {model} for task {task_type}")
-            return config, model
+        if not available:
+            raise RuntimeError(
+                "No AI CLI available. Install one of: ollama, gemini, codex, or claude"
+            )
 
-        # Fallback: use first available non-degraded CLI
-        for cli_type, config in priority_order:
-            if self.is_available(cli_type) and not self.health_monitor.is_degraded(cli_type):
-                model = config.models.get(task_type, FALLBACK_MODEL)
-                logger.warning(f"Using fallback CLI {cli_type.value} with model {model}")
-                return config, model
+        def _select_from(candidates: List[Tuple[CLIType, CLIConfig]]) -> Tuple[CLIConfig, str]:
+            """Pick first candidate respecting prefer_structured_output."""
+            for ct, cfg in candidates:
+                if prefer_structured_output and not cfg.structured_output:
+                    if len(candidates) == 1:
+                        break
+                    continue
+                return cfg, cfg.models.get(task_type, FALLBACK_MODEL)
+            cfg = candidates[0][1]
+            return cfg, cfg.models.get(task_type, FALLBACK_MODEL)
 
-        raise RuntimeError(
-            "No AI CLI available. Install one of: ollama, gemini, codex, or claude"
+        # Static selection (reference for Phase 3 + fallback when no_adaptive)
+        static_config, static_model = _select_from(available)
+
+        if no_adaptive or memory is None:
+            logger.info(
+                f"Selected {static_config.cli_type.value} with model {static_model} "
+                f"for task {task_type} (static)"
+            )
+            return static_config, static_model
+
+        # Phase 1: Sort by win_rate from cli_performance (includes pre-seeded priors)
+        perf_rows = memory.get_cli_performance(task_type)
+        perf_map = {row["cli_name"]: row for row in perf_rows}
+
+        sorted_available = sorted(
+            available,
+            key=lambda x: (
+                -perf_map.get(x[0].value, {}).get("win_rate", 0.0),
+                x[1].fallback_priority,
+            ),
         )
+        current_best_type, current_best_config = sorted_available[0]
+
+        # Anti-thrash guard: >=3 distinct CLIs in last ANTI_THRASH_WINDOW runs -> hold static
+        recent = memory.get_recent_cli_runs(task_type, limit=AdaptiveConfig.ANTI_THRASH_WINDOW)
+        if len(set(recent)) >= AdaptiveConfig.ANTI_THRASH_DISTINCT_LIMIT:
+            logger.info(
+                f"Anti-thrash: holding static CLI {static_config.cli_type.value} for {task_type}"
+            )
+            return static_config, static_model
+
+        # Phase 2: Streak correction (need at least STREAK_WINDOW runs)
+        if len(recent) >= AdaptiveConfig.STREAK_WINDOW:
+            last_n = recent[:AdaptiveConfig.STREAK_WINDOW]
+
+            # Winning streak: all same CLI AND it's the Phase 1 best -> lock it
+            if len(set(last_n)) == 1 and last_n[0] == current_best_type.value:
+                winner_name = last_n[0]
+                for cli_type, config in available:
+                    if cli_type.value == winner_name:
+                        model = config.models.get(task_type, FALLBACK_MODEL)
+                        logger.info(
+                            f"Streak lock: {winner_name} for {task_type} "
+                            f"({AdaptiveConfig.STREAK_WINDOW} consecutive runs)"
+                        )
+                        return config, model
+
+            # Losing streak: current_best not in last N runs -> skip to next
+            if current_best_type.value not in last_n:
+                remaining = [(ct, cfg) for ct, cfg in sorted_available[1:]]
+                if remaining:
+                    logger.info(
+                        f"Streak skip: {current_best_type.value} not in last "
+                        f"{AdaptiveConfig.STREAK_WINDOW} runs for {task_type}"
+                    )
+                    return _select_from(remaining)
+
+        # Phase 3: Win rate override (10+ rated runs, delta >=15pp)
+        current_best_perf = perf_map.get(current_best_type.value, {})
+        if current_best_perf.get("run_count", 0) >= AdaptiveConfig.MIN_RUNS_BEFORE_OVERRIDE:
+            static_perf = perf_map.get(static_config.cli_type.value, {})
+            delta = (
+                current_best_perf.get("win_rate", 0.0)
+                - static_perf.get("win_rate", 0.0)
+            )
+            if delta >= AdaptiveConfig.WIN_RATE_DELTA_THRESHOLD:
+                model = current_best_config.models.get(task_type, FALLBACK_MODEL)
+                logger.info(
+                    f"[adaptive] {task_type} -> {current_best_type.value} "
+                    f"(was {static_config.cli_type.value}) — "
+                    f"{current_best_type.value}: {current_best_perf['win_rate']:.0%} win rate "
+                    f"vs {static_config.cli_type.value}: {static_perf.get('win_rate', 0.0):.0%} "
+                    f"({current_best_perf['run_count']} runs)"
+                )
+                return current_best_config, model
+
+        # Default: Phase 1 winner
+        model = current_best_config.models.get(task_type, FALLBACK_MODEL)
+        logger.info(
+            f"Selected {current_best_type.value} with model {model} "
+            f"for task {task_type} (adaptive phase 1)"
+        )
+        return current_best_config, model
 
     def get_fallback_chain(self, task_type: str) -> List[Tuple[CLIType, str]]:
         """

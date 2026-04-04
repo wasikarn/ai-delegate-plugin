@@ -12,7 +12,8 @@ import time
 import pytest
 from unittest.mock import patch, MagicMock
 from ai_delegate.router import CliHealthMonitor, SmartRouter, detect_complexity, get_model_for_complexity, CLIType, ComplexityLevel
-from ai_delegate.constants import Models, TaskTypes, ComplexityThresholds, HealthConfig
+from ai_delegate.constants import Models, TaskTypes, ComplexityThresholds, HealthConfig, AdaptiveConfig
+from ai_delegate.memory import AnalysisMemory, MemoryRecord
 
 
 class TestCLIDetection:
@@ -356,3 +357,76 @@ class TestSmartRouterHealthGate:
             router.health_monitor.mark_failed(cli, "auth")
         with pytest.raises(RuntimeError, match="No AI CLI available"):
             router.select_cli_for_task("audit")
+
+
+# =============================================================================
+# Task 5: 3-phase adaptive routing
+# =============================================================================
+
+class TestAdaptiveRouting:
+    @pytest.fixture
+    def memory(self, tmp_path):
+        return AnalysisMemory(db_path=tmp_path / "test.db")
+
+    @pytest.fixture
+    def router(self):
+        with patch("ai_delegate.router.shutil.which", return_value="/usr/bin/tool"):
+            return SmartRouter()
+
+    def _add_run(self, memory, task_type, cli_name):
+        record = MemoryRecord(
+            file_path="src/x.py", task_type=task_type,
+            consensus_score=0.75, finding_count=1,
+            critical_count=0, high_count=1, findings_summary="X",
+        )
+        run_id = memory.store(record)
+        memory.record_cli_run(run_id, cli_name)
+        return run_id
+
+    def test_no_adaptive_uses_static_priority(self, router, memory):
+        config, _ = router.select_cli_for_task(
+            "audit", memory=memory, no_adaptive=True
+        )
+        assert config.cli_type == CLIType.OLLAMA
+
+    def test_phase1_priors_select_higher_win_rate(self, router, memory):
+        # Claude prior for audit = 0.80, ollama = 0.70
+        config, _ = router.select_cli_for_task("audit", memory=memory)
+        assert config.cli_type == CLIType.CLAUDE
+
+    def test_phase2_winning_streak_locks_cli(self, router, memory):
+        for _ in range(3):
+            self._add_run(memory, "refactor", "ollama")
+        config, _ = router.select_cli_for_task("refactor", memory=memory)
+        assert config.cli_type == CLIType.OLLAMA
+
+    def test_phase2_losing_streak_skips_current_best(self, router, memory):
+        for _ in range(3):
+            self._add_run(memory, "architecture", "gemini")
+        # codex is current_best for architecture (prior 0.80) but wasn't used → skip
+        config, _ = router.select_cli_for_task("architecture", memory=memory)
+        assert config.cli_type != CLIType.CODEX
+
+    def test_anti_thrash_guard_holds_static(self, router, memory):
+        self._add_run(memory, "audit", "ollama")
+        self._add_run(memory, "audit", "gemini")
+        self._add_run(memory, "audit", "codex")
+        # 3 distinct CLIs → hold static (ollama for audit per _task_priority_map)
+        config, _ = router.select_cli_for_task("audit", memory=memory)
+        assert config.cli_type == CLIType.OLLAMA
+
+    def test_phase3_win_rate_override(self, router, memory):
+        # Add claude losses first (so they're not the most recent)
+        for _ in range(5):
+            run_id = self._add_run(memory, "audit", "claude")
+            memory.store_rating(run_id, 0)
+        # Add ollama wins last (most recent = last 3 are ollama, no losing streak)
+        for _ in range(15):
+            run_id = self._add_run(memory, "audit", "ollama")
+            memory.store_rating(run_id, 1)
+        config, _ = router.select_cli_for_task("audit", memory=memory)
+        assert config.cli_type == CLIType.OLLAMA
+
+    def test_no_memory_uses_static_priority(self, router):
+        config, _ = router.select_cli_for_task("audit")
+        assert config.cli_type == CLIType.OLLAMA
