@@ -513,7 +513,7 @@ class DebateOrchestrator:
         self.adjudicator = Adjudicator(client, task_config, verbose)
         self.debate_phase = DebatePhase(client, task_config, verbose)
 
-    def analyze(self, content: str, tier: str = Tier.AUTO.value) -> Verdict:
+    def analyze(self, content: str, tier: str = Tier.AUTO.value, elicit: Optional[str] = None) -> Verdict:
         """
         Run complete multi-expert analysis.
 
@@ -527,6 +527,14 @@ class DebateOrchestrator:
         try:
             # Phase 1: Run experts in parallel
             expert_results = self.expert_runner.run_parallel(content)
+
+            # Phase 1.5: Apply elicitation lens if requested (deepens findings before consensus)
+            if elicit:
+                from ..elicitation import ElicitationEngine, ElicitationMethod
+                engine = ElicitationEngine(client=self.client)
+                methods = ElicitationMethod.ALL if elicit == "all" else [elicit]
+                for method in methods:
+                    expert_results = engine.apply(method, expert_results, content)
 
             # Phase 2: Calculate consensus
             consensus = ConsensusCalculator.calculate(expert_results)

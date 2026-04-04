@@ -32,6 +32,7 @@ def run_analysis(
     tier: str = Tier.AUTO.value,
     model: Optional[str] = None,
     verbose: bool = False,
+    elicit: Optional[str] = None,
 ) -> dict:
     """
     Run multi-expert analysis.
@@ -67,7 +68,7 @@ def run_analysis(
     )
 
     # Run analysis
-    verdict = orchestrator.analyze(content, tier=tier)
+    verdict = orchestrator.analyze(content, tier=tier, elicit=elicit)
 
     return verdict.to_dict()
 
@@ -142,6 +143,11 @@ Examples:
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--elicit",
+        choices=["pre-mortem", "first-principles", "inversion", "red-team", "constraint-removal", "all"],
+        help="Apply BMAD elicitation lens after initial analysis for deeper findings",
+    )
 
     args = parser.parse_args()
 
@@ -182,6 +188,7 @@ Examples:
             tier=args.tier,
             model=args.model,
             verbose=args.verbose,
+            elicit=args.elicit,
         )
 
         if args.output == "json":
