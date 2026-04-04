@@ -160,6 +160,99 @@ class HealthConfig:
     AUTH_TTL       = -1    # sentinel: indefinite (float("inf") in code)
 ```
 
+### CLI Execution — Non-Interactive Commands (Researched)
+
+#### Ollama
+
+```python
+# Non-interactive run — use stdin, NOT prompt-as-arg
+subprocess.run(
+    ["ollama", "run", "glm-5:cloud", "--nowordwrap"],
+    input="<prompt>\n",
+    capture_output=True, text=True, timeout=300,
+)
+# JSON output: add "--format", "json"
+```
+
+**Health probe (fastest, ~50ms, no tokens):**
+
+```python
+# 1. Server alive?
+subprocess.run(["curl", "-s", "http://localhost:11434/"],
+               capture_output=True, timeout=2)
+# → stdout == "Ollama is running"
+
+# 2. Model available?
+result = subprocess.run(["curl", "-s", "http://localhost:11434/api/tags"],
+                        capture_output=True, text=True, timeout=2)
+models = json.loads(result.stdout).get("models", [])
+available = any(m["name"] == "glm-5:cloud" for m in models)
+# Note: cloud models have "size": 0 — this is normal, not missing
+```
+
+No auth/credit issues — local execution only.
+
+#### Codex
+
+```python
+# Non-interactive run
+subprocess.run(
+    ["codex", "exec", "<prompt>", "-m", "o3-mini", "--full-auto"],
+    capture_output=True, text=True, timeout=300,
+)
+# JSON events to stdout: add "--json"
+# Save last message: add "-o", "/tmp/codex_out.txt"
+# stdin pipe alternative:
+subprocess.run(["codex", "exec", "-m", "o3-mini", "--full-auto"],
+               input="<prompt>", capture_output=True, text=True, timeout=300)
+```
+
+**Auth probe (lightweight, no tokens):**
+
+```python
+result = subprocess.run(["codex", "login", "status"],
+                        capture_output=True, text=True, timeout=5)
+logged_in = result.returncode == 0  # stdout: "Logged in using ChatGPT"
+```
+
+**No credit probe available** — credit exhaustion only detectable from run errors (reactive).
+Auth errors: `returncode != 0` from `codex login status`.
+
+#### Claude
+
+```python
+# Non-interactive run (already implemented in _run_fallback)
+subprocess.run(
+    ["claude", "-p", "<prompt>", "--model", "claude-sonnet-4-6"],
+    capture_output=True, text=True, timeout=300,
+)
+```
+
+**Auth probe:**
+
+```python
+result = subprocess.run(["claude", "--version"],
+                        capture_output=True, text=True, timeout=5)
+available = result.returncode == 0
+```
+
+No credit probe available — reactive only.
+
+#### Gemini
+
+**Not installed** on this machine (`which gemini` → not found). Excluded from routing until installed.
+
+### Health Probe Decision Table
+
+| CLI | Auth probe | Credit probe | Server probe | Error source |
+|-----|-----------|-------------|-------------|-------------|
+| ollama | N/A (local) | N/A | `GET /api/tags` timeout=2s | `ConnectionRefused`, model missing |
+| codex | `codex login status` | ❌ reactive only | same as auth | stderr on run |
+| claude | `claude --version` | ❌ reactive only | same as auth | stderr on run |
+| gemini | not installed | — | `which gemini` | — |
+
+**Implication:** Only ollama supports true proactive health check. Codex and Claude require reactive error handling — this confirms Option C (Hybrid/Lazy) is the correct strategy.
+
 ---
 
 ## Section 2: Adaptive Routing Logic
@@ -255,6 +348,6 @@ Only shown when `--verbose` is passed:
 | `ai_delegate/constants.py` | Add `AdaptiveConfig`, `HealthConfig` classes + `CLI_PRIORS` dict |
 | `ai_delegate/cli.py` | Add inline rating prompt + `rate` subcommand |
 | `tests/test_memory.py` | Tests for new memory methods |
-| `ai_delegate/client.py` | Classify errors → call `health_monitor.mark_failed()` on auth/rate-limit/network errors |
+| `ai_delegate/client.py` | Add `_run_codex()` (`codex exec --full-auto`), fix `_run_ollama()` to use stdin not arg, add `probe_cli()` per CLI, classify errors → `health_monitor.mark_failed()` |
 | `tests/test_router.py` | Tests for adaptive override logic + health monitor TTL/fallback |
 | `tests/test_cli.py` | Tests for rating prompt + subcommand |
