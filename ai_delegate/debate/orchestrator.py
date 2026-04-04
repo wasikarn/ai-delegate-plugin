@@ -205,8 +205,20 @@ class ExpertRunner:
         expert_prompt: str,
         content: str,
     ) -> ExpertResult:
-        """Run a single expert analysis."""
-        prompt = f"""{expert_prompt}
+        """Run a single expert analysis with persona identity."""
+        from ..config import EXPERT_PERSONAS
+
+        persona = EXPERT_PERSONAS.get(expert_name.upper(), {})
+        persona_name = None
+        persona_intro = ""
+        if persona:
+            persona_name = f"{persona['name']} ({persona['title']})"
+            persona_intro = (
+                f"You are {persona['name']}, {persona['title']}.\n"
+                f"Your style: {persona['style']}\n\n"
+            )
+
+        prompt = f"""{persona_intro}{expert_prompt}
 
 Content to analyze:
 ```
@@ -238,6 +250,7 @@ Output your findings as structured JSON with:
                 findings=findings,
                 raw_output=json.dumps(output),
                 duration_ms=duration_ms,
+                persona_name=persona_name,
             )
 
         except Exception as e:
@@ -245,6 +258,7 @@ Output your findings as structured JSON with:
                 expert_name=expert_name,
                 expert_type=self.task_config.task_type,
                 error=str(e),
+                persona_name=persona_name,
             )
 
     @classmethod

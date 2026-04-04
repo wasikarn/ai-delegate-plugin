@@ -81,6 +81,7 @@ class ExpertResult:
     _parsed_output: Optional[Dict[str, Any]] = field(default=None, repr=False)
     error: Optional[str] = None
     duration_ms: Optional[float] = None
+    persona_name: Optional[str] = None
 
     @property
     def success(self) -> bool:
