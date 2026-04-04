@@ -18,6 +18,7 @@ from .constants import (
     Models,
     TokenLimits,
     TaskTypes,
+    WorkerConstants,
 )
 
 logger = logging.getLogger(__name__)
@@ -136,7 +137,7 @@ class Supervisor:
         model: str = Models.CLAUDE_SONNET,
         cli: CLIType = CLIType.CLAUDE,
         budget_mode: bool = False,
-        max_workers: int = 4,
+        max_workers: int = WorkerConstants.DEFAULT_MAX_WORKERS,
     ):
         """
         Initialize supervisor.
@@ -243,7 +244,7 @@ class Supervisor:
 def create_supervisor(
     model: str = Models.CLAUDE_SONNET,
     budget_mode: bool = False,
-    max_workers: int = 4
+    max_workers: int = WorkerConstants.DEFAULT_MAX_WORKERS
 ) -> Supervisor:
     """
     Create a supervisor instance.

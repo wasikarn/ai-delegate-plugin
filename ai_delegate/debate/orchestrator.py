@@ -23,6 +23,7 @@ from ..config import (
     CONSENSUS_THRESHOLD_FAST,
     CONSENSUS_THRESHOLD_STANDARD,
 )
+from ..constants import WorkerConstants
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class ExpertRunner:
     """Runs expert analysis in parallel using pooled threads."""
 
     # Shared thread pool for all instances
-    _executor: ClassVar[ThreadPoolExecutor] = ThreadPoolExecutor(max_workers=10)
+    _executor: ClassVar[ThreadPoolExecutor] = ThreadPoolExecutor(max_workers=WorkerConstants.ORCHESTRATOR_MAX_WORKERS)
 
     def __init__(self, client: OllamaClient, task_config: TaskConfig, verbose: bool = False):
         self.client = client
