@@ -38,6 +38,32 @@ class AnalysisMemory:
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(str(self._db_path))
 
+    def _column_exists(self, conn: sqlite3.Connection, table: str, column: str) -> bool:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(row[1] == column for row in rows)
+
+    def _seed_cli_priors(self, conn: sqlite3.Connection) -> None:
+        """Seed cli_performance with CLI_PRIORS if rows don't exist yet."""
+        from .constants import CLI_PRIORS
+        timestamp = datetime.utcnow().isoformat()
+        for cli_name, task_rates in CLI_PRIORS.items():
+            for task_type, win_rate in task_rates.items():
+                existing = conn.execute(
+                    "SELECT 1 FROM cli_performance WHERE cli_name = ? AND task_type = ?",
+                    (cli_name, task_type),
+                ).fetchone()
+                if existing:
+                    continue
+                virtual_runs = 10
+                win_count = round(win_rate * virtual_runs)
+                loss_count = virtual_runs - win_count
+                conn.execute(
+                    """INSERT INTO cli_performance
+                       (cli_name, task_type, run_count, win_count, loss_count, win_rate, last_updated)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (cli_name, task_type, virtual_runs, win_count, loss_count, win_rate, timestamp),
+                )
+
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.execute("""
@@ -73,10 +99,31 @@ class AnalysisMemory:
                 CREATE VIRTUAL TABLE IF NOT EXISTS findings_fts
                 USING fts5(issue_text, severity, task_type, content=findings, content_rowid=id)
             """)
-
-    def store(self, record: MemoryRecord) -> None:
-        with self._connect() as conn:
+            # Adaptive routing schema (backward-compatible)
+            if not self._column_exists(conn, "analysis_runs", "cli_name"):
+                conn.execute("ALTER TABLE analysis_runs ADD COLUMN cli_name TEXT")
+            if not self._column_exists(conn, "analysis_runs", "user_rating"):
+                conn.execute("ALTER TABLE analysis_runs ADD COLUMN user_rating INTEGER")
             conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cli_task ON analysis_runs (cli_name, task_type)"
+            )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS cli_performance (
+                    cli_name     TEXT NOT NULL,
+                    task_type    TEXT NOT NULL,
+                    run_count    INTEGER NOT NULL DEFAULT 0,
+                    win_count    INTEGER NOT NULL DEFAULT 0,
+                    loss_count   INTEGER NOT NULL DEFAULT 0,
+                    win_rate     REAL NOT NULL DEFAULT 0.0,
+                    last_updated TEXT NOT NULL,
+                    PRIMARY KEY (cli_name, task_type)
+                )
+            """)
+            self._seed_cli_priors(conn)
+
+    def store(self, record: MemoryRecord) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
                 """INSERT INTO analysis_runs
                    (file_path, task_type, consensus_score, finding_count,
                     critical_count, high_count, findings_summary, timestamp)
@@ -87,6 +134,7 @@ class AnalysisMemory:
                     record.findings_summary, record.timestamp,
                 ),
             )
+            return int(cursor.lastrowid) if cursor.lastrowid is not None else 0
 
     def get_history(self, file_path: str, task_type: str, limit: int = 10) -> List[MemoryRecord]:
         with self._connect() as conn:
@@ -192,3 +240,86 @@ class AnalysisMemory:
              "severity": r[3], "issue_text": r[4], "timestamp": r[5]}
             for r in rows
         ]
+
+    def record_cli_run(self, run_id: int, cli_name: str) -> None:
+        """Backfill cli_name into analysis_runs after a run completes."""
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE analysis_runs SET cli_name = ? WHERE id = ?",
+                (cli_name, run_id),
+            )
+
+    def store_rating(self, run_id: int, rating: int) -> None:
+        """Store binary rating (0/1) and incrementally update cli_performance."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT cli_name, task_type FROM analysis_runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()
+            if not row or not row[0]:
+                return
+            cli_name, task_type = row
+            conn.execute(
+                "UPDATE analysis_runs SET user_rating = ? WHERE id = ?",
+                (rating, run_id),
+            )
+            timestamp = datetime.utcnow().isoformat()
+            if rating == 1:
+                conn.execute(
+                    """UPDATE cli_performance
+                       SET win_count = win_count + 1,
+                           run_count = run_count + 1,
+                           win_rate = CAST(win_count + 1 AS REAL) / (win_count + loss_count + 1),
+                           last_updated = ?
+                       WHERE cli_name = ? AND task_type = ?""",
+                    (timestamp, cli_name, task_type),
+                )
+            else:
+                conn.execute(
+                    """UPDATE cli_performance
+                       SET loss_count = loss_count + 1,
+                           run_count = run_count + 1,
+                           win_rate = CAST(win_count AS REAL) / (win_count + loss_count + 1),
+                           last_updated = ?
+                       WHERE cli_name = ? AND task_type = ?""",
+                    (timestamp, cli_name, task_type),
+                )
+            # Upsert if CLI not in priors
+            conn.execute(
+                """INSERT OR IGNORE INTO cli_performance
+                   (cli_name, task_type, run_count, win_count, loss_count, win_rate, last_updated)
+                   VALUES (?, ?, 1, ?, ?, ?, ?)""",
+                (cli_name, task_type,
+                 1 if rating == 1 else 0,
+                 0 if rating == 1 else 1,
+                 float(rating), timestamp),
+            )
+
+    def get_cli_performance(self, task_type: str) -> List[Dict]:
+        """Return all cli_performance rows for a task_type, ordered by win_rate DESC."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT cli_name, win_rate, win_count, loss_count, run_count, last_updated
+                   FROM cli_performance WHERE task_type = ?
+                   ORDER BY win_rate DESC""",
+                (task_type,),
+            ).fetchall()
+        return [
+            {
+                "cli_name": r[0], "win_rate": r[1], "win_count": r[2],
+                "loss_count": r[3], "run_count": r[4], "last_updated": r[5],
+            }
+            for r in rows
+        ]
+
+    def get_recent_cli_runs(self, task_type: str, limit: int = 3) -> List[str]:
+        """Return cli_name of last N runs for task_type (newest first).
+        Only includes rows where cli_name is set."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT cli_name FROM analysis_runs
+                   WHERE task_type = ? AND cli_name IS NOT NULL
+                   ORDER BY id DESC LIMIT ?""",
+                (task_type, limit),
+            ).fetchall()
+        return [r[0] for r in rows]
