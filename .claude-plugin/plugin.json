@@ -1,20 +1,24 @@
 {
   "name": "ai-delegate",
-  "description": "Multi-agent debate system for code analysis. Domain experts analyze in parallel, debate findings, and adjudicator synthesizes final verdict. Use for code review, security audit, performance analysis, or architecture review.",
-  "version": "2.2.0",
+  "description": "Multi-agent AI delegation framework with smart CLI routing and domain expert debate system. Token optimization (82-98% savings), budget mode (98% cost reduction), complexity-based model selection, and supervisor+worker pattern.",
+  "version": "0.0.1",
   "license": "MIT",
   "keywords": [
+    "ai",
+    "delegation",
     "multi-agent",
     "debate",
+    "security",
+    "performance",
+    "architecture",
     "code-review",
-    "security-audit",
-    "performance-analysis",
-    "architecture-review"
+    "token-optimization",
+    "budget-mode"
   ],
   "author": {
     "name": "KoBig",
     "url": "https://github.com/wasikarn"
   },
-  "homepage": "https://github.com/wasikarn/ai-delegate#readme",
-  "repository": "https://github.com/wasikarn/ai-delegate"
+  "homepage": "https://github.com/wasikarn/ai-delegate-plugin#readme",
+  "repository": "https://github.com/wasikarn/ai-delegate-plugin"
 }

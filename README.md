@@ -62,9 +62,25 @@ Automatically selects the best available AI CLI and model for each task:
 
 ## Installation
 
-### As Claude Code Plugin
+### Option 1: Claude Code Plugin Marketplace (Recommended)
 
 Add to your `~/.claude/settings.json`:
+
+```json
+{
+  "plugins": {
+    "marketplaces": [
+      "https://github.com/wasikarn/ai-delegate-plugin.git"
+    ]
+  }
+}
+```
+
+Then restart Claude Code. The plugin will be automatically installed.
+
+### Option 2: Local Development
+
+For local development or testing:
 
 ```json
 {
@@ -78,7 +94,7 @@ Add to your `~/.claude/settings.json`:
 
 ### Python Package Setup
 
-One-time installation:
+One-time installation (required for CLI commands):
 
 ```bash
 pip install -e /path/to/ai-delegate-plugin --break-system-packages
