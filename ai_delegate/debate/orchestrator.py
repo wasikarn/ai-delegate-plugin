@@ -437,6 +437,23 @@ class DebatePhase:
         self.task_config = task_config
         self.verbose = verbose
 
+    def _select_peers(self, expert_idx: int, total: int, k: int) -> List[int]:
+        """
+        Select k peer indices for an expert using deterministic round-robin.
+
+        Each expert sees the k experts that follow it in the list (wrapping around).
+
+        Args:
+            expert_idx: Index of the current expert (0 to total-1)
+            total: Total number of experts
+            k: Desired number of peers to see
+
+        Returns:
+            Sorted list of peer indices (length min(k, total-1))
+        """
+        actual_k = min(k, total - 1)
+        return sorted((expert_idx + i + 1) % total for i in range(actual_k))
+
     def run(self, expert_results: List[ExpertResult]) -> List[ExpertResult]:
         """
         Run debate phase between experts in parallel.
@@ -453,19 +470,30 @@ class DebatePhase:
         if not valid_results:
             return []
 
-        # Build ONE shared findings string — O(n) total, O(1) lookup per expert.
-        # Each expert sees all findings including their own in "other experts" section,
-        # but their own findings are already in "Your initial findings" so LLM handles this fine.
+        # Build shared findings string for full topology (O(n) total).
         all_findings_str = build_findings(expert_results)
 
+        # Sparse topology: pre-compute per-expert peer findings when k is set.
+        k = self.task_config.sparse_topology_k
+        if k is not None:
+            peer_findings: Dict[str, str] = {
+                r.expert_name: build_findings(
+                    [valid_results[i] for i in self._select_peers(idx, len(valid_results), k)]
+                )
+                for idx, r in enumerate(valid_results)
+            }
+        else:
+            peer_findings = {r.expert_name: all_findings_str for r in valid_results}
+
         def _debate_one(result: ExpertResult) -> ExpertResult:
+            findings_str = peer_findings[result.expert_name]
             prompt = f"""You are the {result.expert_name} Expert.
 
 Your initial findings:
 {result.raw_output}
 
 Other experts' findings:
-{all_findings_str}
+{findings_str}
 
 Instructions:
 1. Compare your findings with other experts

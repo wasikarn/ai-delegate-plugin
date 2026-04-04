@@ -10,7 +10,7 @@ from typing import Any
 
 from ai_delegate.client import OllamaClient
 from ai_delegate.models import TaskConfig, ExpertResult, Finding, Tier, Verdict
-from ai_delegate.debate.orchestrator import DebateOrchestrator, ConsensusCalculator
+from ai_delegate.debate.orchestrator import DebateOrchestrator, ConsensusCalculator, DebatePhase, ExpertRunner
 
 
 class TestDebateOrchestrator:
@@ -554,3 +554,98 @@ def hello():
         assert elapsed < 0.15, f"Expected parallel execution (<0.15s), got {elapsed:.3f}s"
         assert isinstance(results, list)
         assert len(results) == len(debate_results)
+
+
+class TestSparseTopology:
+    """Tests for DebatePhase sparse topology: _select_peers and filtered findings."""
+
+    @pytest.fixture
+    def mock_client(self) -> Any:
+        client = Mock(spec=OllamaClient)
+        client.run_json.return_value = {"findings": [{"severity": "high", "issue": "Test"}]}
+        return client
+
+    @pytest.fixture
+    def audit_config(self) -> TaskConfig:
+        return TaskConfig.from_task_type("audit")
+
+    # --- _select_peers unit tests ---
+
+    def test_select_peers_basic(self, mock_client: Any, audit_config: TaskConfig):
+        """Expert 0 with k=2, N=3 sees peers 1 and 2."""
+        phase = DebatePhase(mock_client, audit_config)
+        assert phase._select_peers(0, 3, 2) == [1, 2]
+
+    def test_select_peers_wraps_around(self, mock_client: Any, audit_config: TaskConfig):
+        """Expert 2 with k=2, N=3 wraps around to peers 0 and 1."""
+        phase = DebatePhase(mock_client, audit_config)
+        assert phase._select_peers(2, 3, 2) == [0, 1]
+
+    def test_select_peers_middle(self, mock_client: Any, audit_config: TaskConfig):
+        """Expert 1 with k=2, N=4 sees peers 2 and 3."""
+        phase = DebatePhase(mock_client, audit_config)
+        assert phase._select_peers(1, 4, 2) == [2, 3]
+
+    def test_select_peers_caps_at_n_minus_1(self, mock_client: Any, audit_config: TaskConfig):
+        """k >= N-1 returns all peers (full visibility)."""
+        phase = DebatePhase(mock_client, audit_config)
+        result = phase._select_peers(0, 3, 5)
+        assert sorted(result) == [1, 2]
+
+    def test_select_peers_k_equals_1(self, mock_client: Any, audit_config: TaskConfig):
+        """k=1 returns exactly 1 peer."""
+        phase = DebatePhase(mock_client, audit_config)
+        result = phase._select_peers(0, 3, 1)
+        assert result == [1]
+
+    # --- Integration: DebatePhase.run() with sparse topology ---
+
+    def test_debate_phase_full_topology_by_default(self, mock_client: Any, audit_config: TaskConfig):
+        """sparse_topology_k=None uses full visibility (default)."""
+        assert audit_config.sparse_topology_k is None
+        expert_results = [
+            ExpertResult(
+                expert_name="owasp", expert_type="audit",
+                findings=[Finding(severity="high", issue="SQL injection")],
+                raw_output='{"findings": []}',
+            ),
+            ExpertResult(
+                expert_name="auth", expert_type="audit",
+                findings=[Finding(severity="medium", issue="Auth bypass")],
+                raw_output='{"findings": []}',
+            ),
+        ]
+        phase = DebatePhase(mock_client, audit_config)
+        results = phase.run(expert_results)
+        assert len(results) == 2
+
+    def test_debate_phase_sparse_k1_each_expert_sees_one_peer(
+        self, mock_client: Any, audit_config: TaskConfig
+    ):
+        """sparse_topology_k=1: each expert prompt contains exactly 1 peer section."""
+        audit_config.sparse_topology_k = 1
+        prompts_seen: list = []
+
+        def capture(prompt: str) -> dict:
+            prompts_seen.append(prompt)
+            return {"findings": []}
+
+        mock_client.run_json.side_effect = capture
+
+        expert_results = [
+            ExpertResult(
+                expert_name=name, expert_type="audit",
+                findings=[],
+                raw_output='{"findings": []}',
+            )
+            for name in ["owasp", "auth", "input"]
+        ]
+
+        phase = DebatePhase(mock_client, audit_config)
+        results = phase.run(expert_results)
+
+        assert len(results) == 3
+        # Each prompt should contain exactly 1 "### X Expert:" peer section
+        for prompt in prompts_seen:
+            count = prompt.count("### ")
+            assert count == 1, f"Expected 1 peer section (k=1), got {count}"
