@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS cli_performance (
 ### Migration Notes
 
 - `ALTER TABLE` adds NULLable columns — backward compatible, no data loss
-- `cli_performance` seeds from existing `analysis_runs` on first run (ETL pass)
+- `cli_performance` seeds from existing `analysis_runs` on first run via `_init_db()` ETL pass (single-process, no concurrency risk — SQLite write lock handles it)
 - `cli_performance` updates incrementally on each new run or rating — not recomputed from scratch
 
 ### New `AnalysisMemory` Methods
@@ -45,10 +45,15 @@ def record_cli_run(self, run_id: int, cli_name: str) -> None:
     """Backfill cli_name into analysis_runs after a run completes."""
 
 def store_rating(self, run_id: int, rating: int) -> None:
-    """Store binary rating (0/1) and recompute cli_performance for affected (cli_name, task_type)."""
+    """Store binary rating (0/1) and incrementally update cli_performance for affected
+    (cli_name, task_type) using atomic SQL: UPDATE win_count = win_count + 1 (not full recompute).
+    """
 
 def get_cli_performance(self, task_type: str) -> List[Dict]:
-    """Return all cli_performance rows for a task_type, ordered by win_rate DESC."""
+    """Return all cli_performance rows for a task_type, ordered by win_rate DESC.
+    Each dict has keys: cli_name (str), win_rate (float), win_count (int),
+    loss_count (int), run_count (int), last_updated (str).
+    """
 ```
 
 ---
