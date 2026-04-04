@@ -29,19 +29,15 @@ from .constants import (
 
 def _format_model_display(model: str) -> str:
     """Format model name with its CLI backend for display."""
-    ollama_models = set(OLLAMA_MODELS.values())
-    gemini_models = set(GEMINI_MODELS.values())
-    codex_models = set(CODEX_MODELS.values())
-    claude_models = set(CLAUDE_MODELS.values())
-
-    if model in ollama_models:
-        return f"ollama {model}"
-    if model in gemini_models:
-        return f"gemini {model}"
-    if model in codex_models:
-        return f"codex {model}"
-    if model in claude_models:
-        return f"claude {model}"
+    cli_model_sets = [
+        ("ollama", OLLAMA_MODELS),
+        ("gemini", GEMINI_MODELS),
+        ("codex",  CODEX_MODELS),
+        ("claude", CLAUDE_MODELS),
+    ]
+    for cli, models in cli_model_sets:
+        if model in models.values():
+            return f"{cli} {model}"
     return model
 
 
