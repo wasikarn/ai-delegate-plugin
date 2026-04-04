@@ -107,22 +107,22 @@ class TestClientRunOllamaPaths:
         """Test verbose logging in _run_ollama (line 161)."""
         client.verbose = True
         mock_run.return_value = Mock(returncode=0, stdout="output", stderr="")
-        result = client._run_ollama("prompt", "test-model", "--format")
+        result = client._run_ollama("prompt", json_output=True)
         assert result == "output"
 
     @patch("ai_delegate.client.subprocess.run")
     def test_run_ollama_command_failure(self, mock_run, client):
         """Test non-rate-limit error (line 212)."""
         mock_run.return_value = Mock(returncode=1, stdout="", stderr="model not found")
-        with pytest.raises(RuntimeError, match="Ollama failed"):
-            client._run_ollama("prompt", "test-model", "")
+        with pytest.raises(RuntimeError, match="Command failed"):
+            client._run_ollama("prompt", json_output=False)
 
     @patch("ai_delegate.client.subprocess.run")
     def test_run_ollama_with_format_flag(self, mock_run, client):
         """Test with format flag (line 228)."""
         mock_run.return_value = Mock(returncode=0, stdout='{"key": "value"}', stderr="")
-        result = client._run_ollama("prompt", "test-model", "--format")
-        assert result == '{"key": "value"}'
+        result = client._run_ollama("prompt", json_output=True)
+        assert "key" in result
 
 
 class TestClientFallbackPaths:
@@ -270,8 +270,8 @@ class TestClientCommandFailure:
 
         with patch("ai_delegate.client.subprocess.run") as mock_run:
             mock_run.return_value = Mock(returncode=1, stdout="", stderr="Error: model not found")
-            with pytest.raises(RuntimeError, match="Ollama failed"):
-                client._run_ollama("prompt", "test-model", "")
+            with pytest.raises(RuntimeError, match="Command failed"):
+                client._run_ollama("prompt", json_output=False)
 
 
 class TestOrchestratorLine81:
