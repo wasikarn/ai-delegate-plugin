@@ -56,6 +56,23 @@ class AnalysisMemory:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_file_task ON analysis_runs (file_path, task_type)"
             )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS findings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    analysis_run_id INTEGER,
+                    task_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    issue_text TEXT NOT NULL,
+                    timestamp TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_findings_task ON findings (task_type)"
+            )
+            conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS findings_fts
+                USING fts5(issue_text, severity, task_type, content=findings, content_rowid=id)
+            """)
 
     def store(self, record: MemoryRecord) -> None:
         with self._connect() as conn:
@@ -107,3 +124,71 @@ class AnalysisMemory:
                 "curr_score": current.consensus_score,
             }
         return None
+
+    def store_findings(
+        self,
+        analysis_run_id: Optional[int],
+        task_type: str,
+        findings: List[Dict],
+    ) -> None:
+        """Store individual findings and update FTS5 index."""
+        timestamp = datetime.utcnow().isoformat()
+        with self._connect() as conn:
+            for f in findings:
+                cursor = conn.execute(
+                    """INSERT INTO findings (analysis_run_id, task_type, severity, issue_text, timestamp)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (analysis_run_id, task_type, f.get("severity", ""), f.get("issue", ""), timestamp),
+                )
+                rowid = cursor.lastrowid
+                conn.execute(
+                    "INSERT INTO findings_fts(rowid, issue_text, severity, task_type) VALUES (?, ?, ?, ?)",
+                    (rowid, f.get("issue", ""), f.get("severity", ""), task_type),
+                )
+
+    def get_all_findings(self, task_type: Optional[str] = None) -> List[Dict]:
+        """Return all stored findings, optionally filtered by task_type."""
+        with self._connect() as conn:
+            if task_type:
+                rows = conn.execute(
+                    "SELECT id, analysis_run_id, task_type, severity, issue_text, timestamp FROM findings WHERE task_type = ?",
+                    (task_type,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, analysis_run_id, task_type, severity, issue_text, timestamp FROM findings"
+                ).fetchall()
+        return [
+            {"id": r[0], "analysis_run_id": r[1], "task_type": r[2],
+             "severity": r[3], "issue_text": r[4], "timestamp": r[5]}
+            for r in rows
+        ]
+
+    def search_findings(self, query: str, task_type: Optional[str] = None, limit: int = 20) -> List[Dict]:
+        """Full-text search across stored findings using FTS5."""
+        with self._connect() as conn:
+            if task_type:
+                rows = conn.execute(
+                    """SELECT f.id, f.analysis_run_id, f.task_type, f.severity, f.issue_text, f.timestamp
+                       FROM findings_fts
+                       JOIN findings f ON findings_fts.rowid = f.id
+                       WHERE findings_fts MATCH ? AND f.task_type = ?
+                       ORDER BY rank
+                       LIMIT ?""",
+                    (query, task_type, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT f.id, f.analysis_run_id, f.task_type, f.severity, f.issue_text, f.timestamp
+                       FROM findings_fts
+                       JOIN findings f ON findings_fts.rowid = f.id
+                       WHERE findings_fts MATCH ?
+                       ORDER BY rank
+                       LIMIT ?""",
+                    (query, limit),
+                ).fetchall()
+        return [
+            {"id": r[0], "analysis_run_id": r[1], "task_type": r[2],
+             "severity": r[3], "issue_text": r[4], "timestamp": r[5]}
+            for r in rows
+        ]
