@@ -307,6 +307,41 @@ class TestDebateOrchestratorTierSelection:
         assert tier == Tier.DEEP.value
 
 
+class TestTaskConfigNewFields:
+    """Tests for new TaskConfig fields: expert_models and sparse_topology_k."""
+
+    @pytest.fixture
+    def audit_config(self) -> TaskConfig:
+        """Create audit config."""
+        return TaskConfig.from_task_type("audit")
+
+    def test_expert_models_defaults_to_empty_dict(
+        self, audit_config: TaskConfig
+    ):
+        """expert_models should default to empty dict."""
+        assert audit_config.expert_models == {}
+
+    def test_sparse_topology_k_defaults_to_none(
+        self, audit_config: TaskConfig
+    ):
+        """sparse_topology_k should default to None."""
+        assert audit_config.sparse_topology_k is None
+
+    def test_expert_models_can_be_set(
+        self, audit_config: TaskConfig
+    ):
+        """expert_models should be settable."""
+        audit_config.expert_models = {"owasp": "gpt-4o", "auth": "gemini-2.5-pro"}
+        assert audit_config.expert_models == {"owasp": "gpt-4o", "auth": "gemini-2.5-pro"}
+
+    def test_sparse_topology_k_can_be_set(
+        self, audit_config: TaskConfig
+    ):
+        """sparse_topology_k should be settable."""
+        audit_config.sparse_topology_k = 2
+        assert audit_config.sparse_topology_k == 2
+
+
 class TestDebateOrchestratorEdgeCases:
     """Edge case tests for DebateOrchestrator."""
 

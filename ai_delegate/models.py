@@ -194,6 +194,10 @@ class TaskConfig:
     output_format: str
     default_model: str
     always_deep: bool = False  # Some tasks always use DEEP tier
+    expert_models: Dict[str, str] = field(default_factory=dict)
+    # Maps expert_name -> model_name override. Empty = all experts use session client.
+    sparse_topology_k: Optional[int] = None
+    # None = full peer visibility. Integer k = each expert sees k peers (round-robin).
 
     @classmethod
     def from_task_type(cls, task_type: str) -> "TaskConfig":
