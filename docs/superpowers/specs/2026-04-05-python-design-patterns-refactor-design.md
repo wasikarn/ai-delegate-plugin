@@ -35,9 +35,10 @@ All 3 experts flagged that `OllamaClient` is misleading — the class routes to 
 ### Affected files
 
 - `ai_delegate/client.py` — class definition + factory
+- `ai_delegate/__init__.py` — line 11 (import) + line 58 (`__all__` export)
 - `ai_delegate/debate/orchestrator.py` — import
 - `ai_delegate/cli.py` — import
-- `tests/test_client.py`, `tests/test_orchestrator.py`, `tests/test_cli.py` — imports
+- `tests/test_client.py`, `tests/test_orchestrator.py`, `tests/test_cli.py`, `tests/test_adjudicator.py`, `tests/test_coverage.py`, `tests/test_expert_runner.py`, `tests/test_full_coverage.py` — imports
 
 ### What does NOT change
 
@@ -117,8 +118,12 @@ Explicit params (not `**kwargs`) are preferred for type safety and IDE autocompl
 ### What updates
 
 - `ai_delegate/models.py` — factory signature + return statement (5 lines)
-- `tests/test_orchestrator.py` — simplify ~10 test sites from 2-step to 1-line construction
-- No other logic changes
+- `tests/` — ~34 `from_task_type()` call sites across all test files; sites using 2-step post-construction can optionally be simplified to 1-line
+- Note: `None` is preserved for `sparse_topology_k` (meaningful = full topology); `expert_models or {}` coerces `None` to empty dict
+
+### What does NOT change
+
+- Post-construction pattern (`config.expert_models = {...}`) remains valid — dataclass fields are mutable
 
 ---
 
@@ -158,12 +163,12 @@ def execute_task(
 
 The current `delegate()` promises routing (fetches `WorkerConfig`) but delivers nothing (ignores it). Code Quality expert's "pass config as first arg to callable" breaks caller API. Architecture expert's "delete the class" loses the error-wrapping + parallel execution utility. Renaming + honest docstring is the minimal honest fix.
 
-`delegate_parallel()` stays unchanged (it wraps `delegate()` calls → will auto-use `execute_task()`).
+`delegate_parallel()` wraps `delegate()` via an explicit `self.delegate` reference at line 225 — **must be updated to `self.execute_task`** as part of Fix D.
 
 ### Affected files
 
-- `ai_delegate/supervisor.py` — rename + simplify `delegate()` + docstring
-- `tests/test_supervisor.py` — rename call sites
+- `ai_delegate/supervisor.py` — rename `delegate()` → `execute_task()`, update `delegate_parallel()` line 225 (`self.delegate` → `self.execute_task`), remove dead `worker_config` lookup, update docstring
+- `tests/test_supervisor.py` — rename all `delegate()` call sites to `execute_task()`
 
 ---
 
