@@ -30,15 +30,6 @@ from .debate.orchestrator import (
     Adjudicator,
     DebatePhase,
 )
-from .router import (
-    SmartRouter,
-    CLIType,
-    ComplexityLevel,
-    detect_complexity,
-    get_model_for_complexity,
-    get_router,
-    select_cli_and_model,
-)
 from .constants import (
     Models,
     TokenLimits,
@@ -87,14 +78,6 @@ __all__ = [
     "ExpertRunner",
     "Adjudicator",
     "DebatePhase",
-    # Router
-    "SmartRouter",
-    "CLIType",
-    "ComplexityLevel",
-    "detect_complexity",
-    "get_model_for_complexity",
-    "get_router",
-    "select_cli_and_model",
     # Constants
     "Models",
     "TokenLimits",

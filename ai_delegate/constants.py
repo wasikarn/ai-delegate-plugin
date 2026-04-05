@@ -282,6 +282,28 @@ GLM_MODELS: Dict[str, str] = {
 }
 
 
+# Maps model name prefixes to CLI type (longest prefix wins)
+# Used by cli.py to select cli_type without SmartRouter
+_MODEL_CLI_MAP: Dict[str, str] = {
+    "glm": "ollama",
+    "kimi": "ollama",
+    "gemini": "gemini",
+    "gpt": "codex",
+    "o3": "codex",
+    "o1": "codex",
+    "claude": "claude",
+}
+
+
+def _cli_for_model(model: str) -> str:
+    """Return CLI name for a model string, defaulting to 'ollama'."""
+    model_lower = model.lower()
+    for prefix, cli in _MODEL_CLI_MAP.items():
+        if model_lower.startswith(prefix):
+            return cli
+    return "ollama"
+
+
 # =============================================================================
 # CLI Strengths
 # =============================================================================

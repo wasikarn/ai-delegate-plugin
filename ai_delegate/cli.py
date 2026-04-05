@@ -92,24 +92,18 @@ def run_analysis(
     except Exception:
         pass  # Memory is non-critical
 
-    # Select CLI using adaptive routing (or static if no_adaptive / no memory)
-    from .router import get_router, CLIType
-    router = get_router()
-    cli_config, selected_model = router.select_cli_for_task(
-        task_type,
-        memory=memory if not no_adaptive else None,
-        no_adaptive=no_adaptive,
-    )
-    effective_model = model or selected_model
+    # Select model directly from constants (ModelAssigner handles per-expert routing)
+    from .constants import FALLBACK_MODEL, DEFAULT_MODELS as _DEFAULT_MODELS, _cli_for_model
+    effective_model = model or _DEFAULT_MODELS.get(task_type, FALLBACK_MODEL)
+    cli_name = _cli_for_model(effective_model)
     if verbose:
-        print(f"CLI: {cli_config.cli_name} | Model: {effective_model}")
+        print(f"CLI: {cli_name} | Model: {effective_model}")
 
-    # Create client with selected CLI type and health monitor callback
+    # Create client
     client = BackendClient(
         model=effective_model,
         verbose=verbose,
-        cli_type=cli_config.cli_name,
-        on_cli_error=lambda cli_name, err: router.health_monitor.mark_failed(CLIType(cli_name), err),
+        cli_type=cli_name,
     )
 
     if mode == "party":
@@ -144,7 +138,7 @@ def run_analysis(
             memory = AnalysisMemory()
         regression = memory.detect_regression(record)
         run_id = memory.store(record)
-        memory.record_cli_run(run_id, cli_config.cli_name)
+        memory.record_cli_run(run_id, cli_name)
         memory.store_findings(
             analysis_run_id=run_id,
             task_type=task_type,
@@ -152,7 +146,7 @@ def run_analysis(
         )
         result["regression"] = regression
         result["_run_id"] = run_id
-        result["_cli_name"] = cli_config.cli_name
+        result["_cli_name"] = cli_name
     except Exception:
         pass  # Memory is non-critical
 
