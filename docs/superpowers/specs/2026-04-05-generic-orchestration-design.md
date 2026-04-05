@@ -297,29 +297,131 @@ Expert gets: full Claude intelligence + all tools (Read, Grep, Glob, Bash).
 
 ### File: `ai_delegate/catalog.py`
 
-Scans all installed plugins for agent definitions.
+Scans all installed plugins for agent definitions. Enforces security requirements S1-S4 (see Security Requirements).
+
+#### Agent Frontmatter Schema
+
+Agents at `~/.claude/plugins/*/agents/*.md` use this frontmatter (matches existing agents in `agents/`):
+
+```yaml
+---
+name: security-expert           # Required. Matches [a-zA-Z0-9_-]+
+description: |                  # Required. Used for domain matching.
+  Security domain expert for multi-agent debate. Analyzes OWASP Top 10...
+model: sonnet                   # Optional. Default model for Path C.
+color: red                      # Optional. Display hint.
+tools: ["Read", "Grep", "Glob", "Bash"]  # Optional. Used for path selection.
+---
+```
+
+**Required fields:** `name`, `description`
+**Optional fields:** `model`, `color`, `tools` — missing fields use defaults
+
+#### Domain Matching Algorithm
+
+Domain matching is keyword-based (case-insensitive substring match on `description`):
+
+```python
+DOMAIN_KEYWORDS: dict[str, list[str]] = {
+    "security":      ["security", "owasp", "vulnerabilit", "injection", "auth", "crypto"],
+    "performance":   ["performance", "complexity", "database", "memory", "bottleneck", "query"],
+    "architecture":  ["architecture", "design", "pattern", "solid", "coupling", "cohesion"],
+    "code-quality":  ["quality", "maintainab", "readab", "code smell", "refactor", "clean"],
+    "testing":       ["test", "coverage", "mock", "assertion", "spec"],
+    "migration":     ["migration", "migrate", "breaking change", "api contract", "deprecat"],
+    "database":      ["database", "sql", "migration", "schema", "index", "query"],
+}
+
+def _detect_domains(description: str) -> list[str]:
+    """Return list of domain keys whose keywords appear in description (lowercase)."""
+    desc_lower = description.lower()
+    return [
+        domain
+        for domain, keywords in DOMAIN_KEYWORDS.items()
+        if any(kw in desc_lower for kw in keywords)
+    ]
+```
+
+An agent with `description = "OWASP Top 10 security analysis"` maps to domains `["security"]`.
+An agent with `description = "Code quality and architecture patterns"` maps to `["architecture", "code-quality"]`.
+
+#### Error Handling Rules
+
+| Condition | Action |
+|-----------|--------|
+| YAML frontmatter malformed | Log warning, skip file |
+| `name` field missing | Log warning, skip file |
+| `name` fails S1 validation | Log warning, skip file |
+| `description` field missing | Use `""` — agent is discoverable but matches no domains |
+| `tools` field missing | Default to `[]` — ModelAssigner routes to Path A |
+| Plugin not in trust list | Skip silently (no warning to avoid info leak) |
+| Plugin dir has > 100 agents | Log warning, load first 100, skip rest |
+| Scan exceeds 5 seconds | Raise `TimeoutError`, propagate to caller |
+
+#### Source Plugin Name Extraction
+
+Plugin name is derived from the directory path: `~/.claude/plugins/<PLUGIN_NAME>/agents/<agent>.md`
+
+```python
+def _extract_plugin_name(agent_path: Path) -> str:
+    """Extract plugin name from path structure ~/.claude/plugins/<name>/agents/*.md"""
+    # Expected: .../<plugin_name>/agents/<agent_file>.md
+    # agent_path.parents[0] = agents/
+    # agent_path.parents[1] = <plugin_name>/
+    try:
+        return agent_path.parents[1].name
+    except IndexError:
+        return "unknown"
+```
+
+#### AgentMetadata Dataclass
+
+```python
+@dataclass
+class AgentMetadata:
+    name: str            # e.g. "security-expert" — validated [a-zA-Z0-9_-]+
+    description: str     # raw description from frontmatter
+    source_plugin: str   # e.g. "ai-delegate", "devflow"
+    model: str           # default model from frontmatter; "" if not specified
+    tools: list[str]     # e.g. ["Read", "Grep", "Glob", "Bash"]
+    path: Path           # resolved canonical path (from _safe_agent_path)
+    domains: list[str]   # detected via _detect_domains(description)
+```
+
+#### AgentCatalog Class
 
 ```python
 class AgentCatalog:
+    def __init__(
+        self,
+        plugins_dir: Path | None = None,
+        trust_file: Path | None = None,
+        trust_all: bool = False,
+    ):
+        self._plugins_dir = plugins_dir or Path.home() / ".claude" / "plugins"
+        self._trust_all = trust_all
+        self._trusted = self._load_trust(trust_file)
+        self._cache: list[AgentMetadata] | None = None  # In-memory per-session
+
     def scan(self) -> list[AgentMetadata]:
-        """Scan ~/.claude/plugins/*/agents/*.md for all available agents."""
+        """Scan all trusted plugins for agents. Returns cached result if already scanned."""
+        if self._cache is not None:
+            return self._cache
+        self._cache = self._scan_with_timeout()
+        return self._cache
 
     def for_domains(self, domains: list[str]) -> list[AgentMetadata]:
-        """Return agents whose description covers given domains."""
+        """Return agents whose detected domains overlap with the given domains list."""
+        all_agents = self.scan()
+        domains_set = set(domains)
+        return [a for a in all_agents if domains_set & set(a.domains)]
 
-@dataclass
-class AgentMetadata:
-    name: str           # e.g. "security-expert"
-    description: str    # from frontmatter
-    source_plugin: str  # e.g. "devflow", "ai-delegate"
-    model: str          # from frontmatter (default model)
-    tools: list[str]    # declared tools
-    path: Path          # absolute path to .md file
+    def invalidate(self) -> None:
+        """Clear in-memory cache (call if plugins installed during session)."""
+        self._cache = None
 ```
 
-CLI: `ai-delegate catalog [--json] [--domain security]`
-
-Reuses logic from existing `plugin_registry.py` (frontmatter parsing).
+CLI: `ai-delegate catalog [--json] [--domain security] [--trust-all]`
 
 ---
 
