@@ -301,3 +301,39 @@ class TestStructure:
         assert Structure.HIERARCHICAL.value == "hierarchical"
         assert Structure.MATRIX.value == "matrix"
         assert Structure.TEAM_BASED.value == "team-based"
+
+
+class TestExpertResultFromDict:
+    """Tests for ExpertResult.from_dict() classmethod."""
+
+    def test_from_dict_roundtrip(self):
+        """ExpertResult survives serialization roundtrip."""
+        original = ExpertResult(
+            expert_name="owasp",
+            expert_type="security",
+            findings=[Finding(severity="high", issue="SQL injection", recommendation="use params")],
+            raw_output='{"findings": []}',
+            error=None,
+            duration_ms=150.0,
+        )
+        restored = ExpertResult.from_dict(original.to_dict())
+        assert restored.expert_name == "owasp"
+        assert restored.expert_type == "security"
+        assert len(restored.findings) == 1
+        assert restored.findings[0].severity == "high"
+        assert restored.findings[0].issue == "SQL injection"
+        assert restored.raw_output == '{"findings": []}'
+        assert restored.duration_ms == 150.0
+
+    def test_from_dict_missing_optional_fields(self):
+        """ExpertResult deserializes with minimal required fields."""
+        result = ExpertResult.from_dict({
+            "expert_name": "auth",
+            "expert_type": "security",
+        })
+        assert result.expert_name == "auth"
+        assert result.expert_type == "security"
+        assert result.findings == []
+        assert result.error is None
+        assert result.raw_output is None
+        assert result.duration_ms is None

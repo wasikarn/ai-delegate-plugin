@@ -109,6 +109,18 @@ class ExpertResult:
             "duration_ms": self.duration_ms,
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExpertResult":
+        """Create from dictionary (inverse of to_dict)."""
+        return cls(
+            expert_name=data.get("expert_name", ""),
+            expert_type=data.get("expert_type", ""),
+            findings=[Finding.from_dict(f) for f in data.get("findings", [])],
+            raw_output=data.get("raw_output"),
+            error=data.get("error"),
+            duration_ms=data.get("duration_ms"),
+        )
+
 
 @dataclass
 class ConsensusResult:
