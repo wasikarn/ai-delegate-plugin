@@ -29,6 +29,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AgentCatalog.for_domains(domains)` — filter agents by detected domain keywords
   - `DOMAIN_KEYWORDS` — 7 domains: security, performance, architecture, code-quality, testing, migration, database
 
+#### Phase 1C Foundation — Path D Agent Teams Peer Debate
+
+- **debate_runner.py** — Data models for Path D Agent Teams peer debate handoff
+  - `DisputedFindingsBundle` — serializable Python → Claude Code skill layer handoff
+    - `to_json()` / `from_json()` — full roundtrip serialization
+    - Carries: disputed_findings, expert_results, task_type, file_context
+  - `DebateResult` — DebateTeamRunner → Adjudicator result container
+    - `from_json()` — deserializes lead agent output
+    - resolved_findings: ≥80% AGREE — skip Adjudicator
+    - unresolved_findings: <80% AGREE — escalate to Adjudicator
+- **ExpertResult.from_dict()** — inverse of `to_dict()`, required for bundle deserialization
+- **ai_delegate/agents/debate-lead.md** — Agent Teams lead (Sonnet)
+  - Creates expert teammates (kimi-k2.5:cloud), coordinates 1-round debate
+  - AGREE/CHALLENGE/WITHDRAW protocol via mailbox
+  - 80% consensus threshold for resolution
+- **ai_delegate/agents/debate-expert.md** — Agent teammate template (kimi-k2.5:cloud)
+  - Responds to disputed findings from shared task list
+  - Does NOT re-analyze codebase — works from findings context only
+- **tests/agents/** — 4 scenario fixtures for manual debate protocol validation
+  - scenario_all_agree, scenario_one_challenged, scenario_split_verdict, scenario_teammate_timeout
+
 ---
 
 ## [0.0.2] - 2026-04-04
