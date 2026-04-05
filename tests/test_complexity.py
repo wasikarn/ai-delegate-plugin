@@ -182,4 +182,100 @@ class TestComplexityLevelEnum:
         assert len(levels) == 3
         assert ComplexityLevel.LOW in levels
         assert ComplexityLevel.MEDIUM in levels
-        assert ComplexityLevel.HIGH in levels
+
+
+# ─── New tests for ai_delegate/complexity.py ComplexityAssessor ──────────────
+
+from ai_delegate.complexity import ComplexityAssessor, ComplexityScore
+
+
+class TestComplexityAssessorLevel:
+    def test_low_under_100_lines(self):
+        content = "\n".join(["x = 1"] * 50)
+        score = ComplexityAssessor.assess(content)
+        assert score.level == "low"
+        assert score.line_count == 50
+
+    def test_medium_100_to_500_lines(self):
+        content = "\n".join(["x = 1"] * 300)
+        score = ComplexityAssessor.assess(content)
+        assert score.level == "medium"
+
+    def test_high_over_500_lines(self):
+        content = "\n".join(["x = 1"] * 600)
+        score = ComplexityAssessor.assess(content)
+        assert score.level == "high"
+
+    def test_exactly_100_lines_is_medium(self):
+        content = "\n".join(["x = 1"] * 100)
+        score = ComplexityAssessor.assess(content)
+        assert score.level == "medium"
+
+    def test_exactly_500_lines_is_high(self):
+        content = "\n".join(["x = 1"] * 500)
+        score = ComplexityAssessor.assess(content)
+        assert score.level == "high"
+
+
+class TestComplexityAssessorDomains:
+    def test_security_terms_detected(self):
+        content = "verify password using jwt token and ssl cert"
+        score = ComplexityAssessor.assess(content)
+        assert "security" in score.domains
+        assert score.security_signals > 0
+
+    def test_performance_terms_detected(self):
+        content = "optimize database query with cache and async"
+        score = ComplexityAssessor.assess(content)
+        assert "performance" in score.domains
+
+    def test_architecture_terms_detected(self):
+        content = "interface factory singleton dependency injection"
+        score = ComplexityAssessor.assess(content)
+        assert "architecture" in score.domains
+
+    def test_no_domain_terms_returns_empty_domains(self):
+        content = "x = 1\ny = 2\nprint(x + y)"
+        score = ComplexityAssessor.assess(content)
+        assert score.domains == []
+
+    def test_high_security_signals_bumps_low_to_medium(self):
+        # >5 security term occurrences should bump low line count → medium
+        terms = ["password", "token", "secret", "crypto", "hash", "jwt", "oauth"]
+        content = " ".join(terms) * 3  # 21 occurrences, 1 line → would be "low"
+        score = ComplexityAssessor.assess(content)
+        assert score.level in ("medium", "high")
+
+    def test_multiple_domains_detected(self):
+        content = "jwt password (security) and database query (performance)"
+        score = ComplexityAssessor.assess(content)
+        assert "security" in score.domains
+        assert "performance" in score.domains
+
+
+class TestComplexityAssessorFiles:
+    def test_assess_files_max_level(self, tmp_path):
+        low_file = tmp_path / "small.py"
+        high_file = tmp_path / "large.py"
+        low_file.write_text("\n".join(["x = 1"] * 50))
+        high_file.write_text("\n".join(["x = 1"] * 600))
+        score = ComplexityAssessor.assess_files([low_file, high_file])
+        assert score.level == "high"
+        assert score.file_count == 2
+        assert score.line_count == 650
+
+    def test_assess_files_merges_domains(self, tmp_path):
+        auth_file = tmp_path / "auth.py"
+        query_file = tmp_path / "query.py"
+        auth_file.write_text("jwt token password")
+        query_file.write_text("database query cache")
+        score = ComplexityAssessor.assess_files([auth_file, query_file])
+        assert "security" in score.domains
+        assert "performance" in score.domains
+
+    def test_assess_files_single_file(self, tmp_path):
+        f = tmp_path / "single.py"
+        f.write_text("\n".join(["x = 1"] * 50))
+        score = ComplexityAssessor.assess_files([f])
+        assert score.file_count == 1
+        assert score.level == "low"
