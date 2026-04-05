@@ -365,3 +365,12 @@ class AnalysisMemory:
             ],
             [r[0] for r in recent_rows],
         )
+
+    def check_cache(
+        self,
+        content_hash: str,
+        task_description: str,
+        expert_names: list,
+    ) -> None:
+        """Check cache for previous analysis. Returns None (cache miss) until cache.py is implemented."""
+        return None

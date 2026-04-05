@@ -225,6 +225,180 @@ def _handle_search_subcommand(args: list) -> None:
     sys.exit(0)
 
 
+def _handle_catalog_subcommand(args: list) -> None:
+    """Handle 'ai-delegate catalog [--json] [--domain X] [--trust-all]'."""
+    import argparse as _ap
+    parser = _ap.ArgumentParser(prog="ai-delegate catalog")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--domain", help="Filter by domain")
+    parser.add_argument("--trust-all", action="store_true")
+    parsed = parser.parse_args(args)
+
+    from .catalog import AgentCatalog
+    catalog = AgentCatalog(trust_all=parsed.trust_all)
+    agents = catalog.for_domains([parsed.domain]) if parsed.domain else catalog.scan()
+
+    output = [
+        {
+            "name": a.name,
+            "description": a.description,
+            "source_plugin": a.source_plugin,
+            "model": a.model,
+            "tools": a.tools,
+            "domains": a.domains,
+        }
+        for a in agents
+    ]
+    print(json.dumps(output, indent=2))
+    sys.exit(0)
+
+
+def _handle_assess_subcommand(args: list) -> None:
+    """Handle 'ai-delegate assess --file path'."""
+    import argparse as _ap
+    parser = _ap.ArgumentParser(prog="ai-delegate assess")
+    parser.add_argument("--file", required=True)
+    parsed = parser.parse_args(args)
+
+    file_path = Path(parsed.file)
+    if not file_path.exists():
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        sys.exit(1)
+
+    from .complexity import ComplexityAssessor
+    score = ComplexityAssessor.assess(file_path.read_text(), file_path.name)
+    print(json.dumps({
+        "level": score.level,
+        "domains": score.domains,
+        "file_count": score.file_count,
+        "line_count": score.line_count,
+        "security_signals": score.security_signals,
+    }))
+    sys.exit(0)
+
+
+def _handle_consensus_subcommand(args: list) -> None:
+    """Handle 'ai-delegate consensus --findings [...]'."""
+    import argparse as _ap
+    parser = _ap.ArgumentParser(prog="ai-delegate consensus")
+    parser.add_argument("--findings", required=True)
+    parsed = parser.parse_args(args)
+
+    try:
+        raw_findings = json.loads(parsed.findings)
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid JSON in --findings: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    from .models import ExpertResult, Finding
+    from .consensus import ConsensusCalculator
+
+    expert_map: dict = {}
+    for raw in raw_findings:
+        expert = raw.get("expert", "unknown")
+        if expert not in expert_map:
+            expert_map[expert] = []
+        expert_map[expert].append(Finding(
+            severity=raw.get("severity", "medium"),
+            issue=raw.get("issue", ""),
+            recommendation=raw.get("recommendation"),
+            location=raw.get("location"),
+        ))
+
+    results = [
+        ExpertResult(expert_name=name, expert_type="unknown", findings=findings)
+        for name, findings in expert_map.items()
+    ]
+
+    if not results:
+        print(json.dumps({"score": 0.0, "tier": "deep", "consensus_findings": [], "disputed_findings": []}))
+        sys.exit(0)
+
+    result = ConsensusCalculator.calculate(results)
+    if result.score >= 0.90:
+        tier = "fast"
+    elif result.score >= 0.70:
+        tier = "standard"
+    else:
+        tier = "deep"
+
+    print(json.dumps({
+        "score": result.score,
+        "tier": tier,
+        "consensus_findings": [f.to_dict() for f in result.consensus_findings],
+        "disputed_findings": [f.to_dict() for f in result.disputed_findings],
+    }))
+    sys.exit(0)
+
+
+def _handle_assign_subcommand(args: list) -> None:
+    """Handle 'ai-delegate assign --agents X,Y --complexity low|medium|high'."""
+    import argparse as _ap
+    parser = _ap.ArgumentParser(prog="ai-delegate assign")
+    parser.add_argument("--agents", required=True)
+    parser.add_argument("--complexity", choices=["low", "medium", "high"], default="medium")
+    parser.add_argument("--trust-all", action="store_true")
+    parsed = parser.parse_args(args)
+
+    agent_names = [n.strip() for n in parsed.agents.split(",") if n.strip()]
+
+    from .catalog import AgentCatalog
+    from .model_assigner import ModelAssigner
+    from .complexity import ComplexityScore
+
+    catalog = AgentCatalog(trust_all=parsed.trust_all)
+    all_agents = {a.name: a for a in catalog.scan()}
+    selected = [all_agents[n] for n in agent_names if n in all_agents]
+    complexity = ComplexityScore(level=parsed.complexity)
+    assignments = ModelAssigner.assign_all(selected, complexity)
+
+    print(json.dumps([
+        {
+            "agent": a.agent.name,
+            "path": a.path.value,
+            "model": a.model,
+            "source_plugin": a.agent.source_plugin,
+            "tools": a.agent.tools,
+        }
+        for a in assignments
+    ]))
+    sys.exit(0)
+
+
+def _handle_memory_check_subcommand(args: list) -> None:
+    """Handle 'ai-delegate memory check --content-hash H --experts X,Y --task T'."""
+    import argparse as _ap
+    import time
+    parser = _ap.ArgumentParser(prog="ai-delegate memory check")
+    parser.add_argument("--content-hash", required=True)
+    parser.add_argument("--experts", default="")
+    parser.add_argument("--task", default="")
+    parsed = parser.parse_args(args)
+
+    expert_names = [n.strip() for n in parsed.experts.split(",") if n.strip()]
+
+    try:
+        from .memory import AnalysisMemory
+        memory = AnalysisMemory()
+        entry = memory.check_cache(
+            content_hash=parsed.content_hash,
+            task_description=parsed.task,
+            expert_names=expert_names,
+        )
+        if entry is None:
+            print(json.dumps({"hit": False}))
+        else:
+            age_hours = (time.time() - entry.cached_at) / 3600
+            print(json.dumps({
+                "hit": True,
+                "score": entry.consensus.score,
+                "age_hours": round(age_hours, 2),
+            }))
+    except Exception:
+        print(json.dumps({"hit": False}))
+    sys.exit(0)
+
+
 def main():
     """Main CLI entry point."""
     # Handle pre-parser subcommands (avoids positional arg conflict with task_type)
@@ -233,6 +407,21 @@ def main():
         return
     if sys.argv[1:2] == ["search"]:
         _handle_search_subcommand(sys.argv[2:])
+        return
+    if sys.argv[1:2] == ["catalog"]:
+        _handle_catalog_subcommand(sys.argv[2:])
+        return
+    if sys.argv[1:2] == ["assess"]:
+        _handle_assess_subcommand(sys.argv[2:])
+        return
+    if sys.argv[1:2] == ["consensus"]:
+        _handle_consensus_subcommand(sys.argv[2:])
+        return
+    if sys.argv[1:2] == ["assign"]:
+        _handle_assign_subcommand(sys.argv[2:])
+        return
+    if sys.argv[1:3] == ["memory", "check"]:
+        _handle_memory_check_subcommand(sys.argv[3:])
         return
 
     parser = argparse.ArgumentParser(
