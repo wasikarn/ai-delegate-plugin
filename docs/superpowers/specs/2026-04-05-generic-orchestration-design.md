@@ -48,15 +48,141 @@ User: /ai-delegate "review this PR diff"
          │      assign model tier + execution path per expert
          │
          ├─ 3. Execute experts in parallel
-         │      ┌─ Claude Code agents (Agent tool)  ← deep reasoning
-         │      ├─ ollama launch claude --agent X   ← real tools, budget model
-         │      └─ Anthropic SDK → Ollama           ← fast, no tools
+         │      ┌─ Path A: Anthropic SDK → Ollama   ← fast, no tools, pattern analysis
+         │      └─ Path C: Claude Code Agent tool   ← deep reasoning + file access
          │
          ├─ 4. ai-delegate consensus --findings <json>
          │      returns: {score, tier, consensus_findings, disputed_findings}
          │
          └─ 5. FAST (≥90%) → output directly
                STANDARD/DEEP → synthesis pass → final verdict
+```
+
+---
+
+## Security Requirements
+
+These requirements apply to `catalog.py` implementation (Phase 1). All four must be implemented; omitting any is a critical vulnerability.
+
+### S1 — Agent Name Validation (Command Injection Prevention)
+
+Any agent name passed to a subprocess or used in a shell command MUST be validated:
+
+```python
+import re
+
+AGENT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
+
+def validate_agent_name(name: str) -> str:
+    """Validate agent name is safe for subprocess use. Raises ValueError if invalid."""
+    if not AGENT_NAME_PATTERN.match(name):
+        raise ValueError(
+            f"Invalid agent name {name!r}: must match [a-zA-Z0-9_-]+"
+        )
+    return name
+```
+
+Called in `catalog.py` during scan:
+
+```python
+for md_file in plugin_agents_dir.glob("*.md"):
+    name = parse_frontmatter(md_file).get("name", "")
+    try:
+        validate_agent_name(name)
+    except ValueError:
+        logger.warning("Skipping agent with unsafe name: %s in %s", name, md_file)
+        continue
+```
+
+**Also:** Never use `shell=True` when passing agent names to subprocess. Always use list args:
+
+```python
+# BAD
+subprocess.run(f"some-cmd --agent {agent_name}", shell=True)
+# GOOD
+subprocess.run(["some-cmd", "--agent", agent_name], shell=False)
+```
+
+### S2 — Plugin Trust Boundary
+
+Catalog scan MUST enforce a plugin allowlist. Agents from unknown plugins are skipped.
+
+Default allowlist file: `~/.claude/ai-delegate-trust.json`
+
+```json
+{
+  "trusted_plugins": ["ai-delegate", "devflow", "atlassian-pm"]
+}
+```
+
+```python
+class AgentCatalog:
+    def __init__(self, trust_file: Path | None = None, trust_all: bool = False):
+        self._trust_all = trust_all
+        self._trusted = self._load_trust(trust_file)
+
+    def _load_trust(self, trust_file: Path | None) -> set[str]:
+        default = Path.home() / ".claude" / "ai-delegate-trust.json"
+        path = trust_file or default
+        if path.exists():
+            data = json.loads(path.read_text())
+            return set(data.get("trusted_plugins", []))
+        # If no trust file exists, trust only ai-delegate (self)
+        return {"ai-delegate"}
+
+    def _is_trusted(self, source_plugin: str) -> bool:
+        return self._trust_all or source_plugin in self._trusted
+```
+
+CLI: `ai-delegate catalog --trust-all` to opt-in to all plugins.
+
+### S3 — Path Traversal Prevention
+
+All agent file paths MUST be resolved to canonical form before use:
+
+```python
+def _safe_agent_path(self, candidate: Path, plugin_dir: Path) -> Path | None:
+    """Return canonical path only if it is under plugin_dir. Returns None otherwise."""
+    resolved = candidate.resolve()
+    plugin_dir_resolved = plugin_dir.resolve()
+    if resolved.is_relative_to(plugin_dir_resolved):
+        return resolved
+    logger.warning("Path traversal rejected: %s → %s", candidate, resolved)
+    return None
+```
+
+Use `follow_symlinks=False` in glob to skip symlinks:
+
+```python
+for md_file in agents_dir.glob("*.md"):
+    safe = self._safe_agent_path(md_file, plugin_dir)
+    if safe is None:
+        continue
+    # proceed with safe path
+```
+
+### S4 — Catalog DoS Protection
+
+```python
+MAX_AGENTS_PER_PLUGIN = 100
+SCAN_TIMEOUT_SECONDS = 5
+MAX_FRONTMATTER_SIZE_BYTES = 4096  # ignore suspiciously large files
+```
+
+Catalog scan enforces all three limits:
+
+```python
+import signal
+
+def _scan_with_timeout(self) -> list[AgentMetadata]:
+    def handler(signum, frame):
+        raise TimeoutError("Catalog scan exceeded 5 seconds")
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(SCAN_TIMEOUT_SECONDS)
+    try:
+        return self._scan_all()
+    finally:
+        signal.alarm(0)
 ```
 
 ---
@@ -125,9 +251,11 @@ Call `ai-delegate memory check --content-hash <hash>` — if unchanged from last
 
 ## Expert Execution Paths
 
-### Path A: Anthropic SDK (fast, no tools)
+Two active paths. Path B (`ollama launch claude`) is NOT YET IMPLEMENTED — requires verification that the CLI supports `--agent` and `--output-format json` flags before adding.
 
-Use for: pattern matching, text analysis, when content is passed directly.
+### Path A: Anthropic SDK (fast, no tools) — ACTIVE
+
+Use for: pattern matching, text analysis, when content is passed directly (no file access needed).
 
 ```python
 # client.py BackendClient (keep)
@@ -135,36 +263,33 @@ client = anthropic.Anthropic(base_url="http://localhost:11434", api_key="ollama"
 response = client.messages.create(
     model="kimi-k2.5:cloud",
     messages=[{"role": "user", "content": expert_prompt + content}],
-    tools=[...],  # Ollama supports tool calling (v0.15.0+)
+    max_tokens=4096,
 )
 ```
 
 CLI: `ai-delegate run-expert --agent security-expert --path sdk --model kimi-k2.5:cloud`
 
-### Path B: ollama launch claude (real tools, budget model)
+**Decision rule:** Does the expert need to READ files itself? → Use Path C instead.
 
-Use for: code exploration, when expert needs to READ files, navigate repo structure.
+### Path B: ollama launch claude (real tools, budget model) — NOT YET IMPLEMENTED
 
-```bash
-ollama launch claude --model kimi-k2.5:cloud --yes -- \
-  --agent security-expert \
-  --output-format json \
-  --allowedTools "Read,Grep,Glob,Bash" \
-  -p "Analyze this repository for security vulnerabilities. Return JSON findings."
-```
+> **BLOCKED:** `ollama launch claude --agent X --output-format json` flags are unverified.
+> Verify these flags exist before implementing. Do not add this path until confirmed.
 
-Expert gets: full file system access + Kimi as the model (cheap, not Claude Sonnet).
+Intended use: code exploration when expert needs real file access but cheaper than Claude Sonnet.
 
-### Path C: Claude Code Agent (deep reasoning)
+### Path C: Claude Code Agent (deep reasoning) — ACTIVE
 
-Use for: architecture review, complex security, anything requiring multi-step reasoning.
+Use for: architecture review, complex security, anything requiring multi-step reasoning or file access.
 
 ```python
 # Orchestrator spawns via Agent tool
 Agent(subagent_type="ai-delegate:architecture-expert", prompt="...")
 ```
 
-Expert gets: full Claude intelligence + all tools.
+Expert gets: full Claude intelligence + all tools (Read, Grep, Glob, Bash).
+
+**Decision rule:** Requires Claude-level reasoning OR needs to read files → Path C.
 
 ---
 
