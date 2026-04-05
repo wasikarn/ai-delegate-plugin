@@ -6,8 +6,8 @@ license: MIT
 compatibility: Python 3.10+. Ollama, Gemini, Codex, Claude CLI.
 metadata:
   author: KoBig
-  version: "0.0.1"
-  tests: 210 tests, 97% coverage
+  version: "0.3.0"
+  tests: 628 tests, 97% coverage
 ---
 
 # AI Delegation Framework
@@ -79,15 +79,25 @@ ai-delegate review src/main.py -d security,performance
 ## Architecture
 
 ```
-SmartRouter → DebateOrchestrator
-├── ExpertRunner (parallel, budget models via Ollama)
-│   ├── Security Expert → findings
-│   ├── Performance Expert → findings
-│   └── Architecture Expert → findings
+SmartRouter → ModelAssigner → Execution Paths
+├── Path A: BackendClient (SDK → localhost:11434, no tools)
+├── Path B: AgentPool (ollama launch claude, Read/Grep/Glob, kimi-k2.5)
+├── Path C: Agent tool (Claude Code Agent, Sonnet, all tools)
+└── Path D: Agent Teams (debate-lead + kimi peers, AGREE/CHALLENGE/WITHDRAW)
+
+DebateOrchestrator
+├── ExpertRunner (parallel, all paths)
 ├── ConsensusCalculator (80% agreement threshold)
-├── DebatePhase
+├── DisputedFindingsBundle → debate-lead agent (Path D)
 └── Adjudicator (Sonnet) → final verdict
 ```
+
+| Path | When | Model |
+|------|------|-------|
+| A | No file access needed | kimi-k2.5:cloud |
+| B | File access, standard domain, low/medium complexity | kimi-k2.5:cloud |
+| C | File access + architecture/migration or high complexity | Sonnet |
+| D | Peer debate on disputed findings | kimi-k2.5:cloud peers |
 
 ## Quality Tiers
 
@@ -115,30 +125,34 @@ SmartRouter → DebateOrchestrator
 
 ```python
 from ai_delegate import (
-    SmartRouter,
-    DebateOrchestrator,
-    TaskConfig,
-    detect_complexity,
-    get_model_for_complexity,
-    ComplexityLevel,
+    SmartRouter, DebateOrchestrator, TaskConfig,
+    # Complexity
+    ComplexityAssessor, ComplexityScore,
+    # Path B
+    AgentExecutorConfig, AgentExecutor, AgentPool,
+    # Routing
+    ModelAssigner, ExecutionPath, ExpertAssignment,
+    # Agent catalog
+    AgentCatalog, AgentMetadata,
+    # Path D
+    DisputedFindingsBundle, DebateResult,
 )
 
-# Detect content complexity
-complexity = detect_complexity(code_content, "audit")
+# Route agents to execution paths
+agents = AgentCatalog().for_domains(["security"])
+complexity = ComplexityAssessor().assess_files(["src/auth.py"])
+assignments = ModelAssigner.assign_all(agents, complexity)
 
-# Get model for complexity (default mode)
-config = get_model_for_complexity(complexity)
+# Run Path B agents in parallel
+config = AgentExecutorConfig(repo_path=Path("."))
+pool = AgentPool(AgentExecutor(config))
+results = pool.run_parallel(
+    [a for a in assignments if a.path == ExecutionPath.CLI],
+    task="audit src/auth.py for security issues",
+)
 
-# Get model for complexity (budget mode)
-config = get_model_for_complexity(complexity, budget_mode=True)
-
-# Auto-select CLI and model
-router = SmartRouter()
-cli_type, model = router.select_cli_for_task("audit")
-
-# Create orchestrator with selected model
-config = TaskConfig.from_task_type("audit")
-orchestrator = DebateOrchestrator(model=model, task_config=config)
+# Standard debate orchestration
+orchestrator = DebateOrchestrator(model=model, task_config=TaskConfig.from_task_type("audit"))
 verdict = orchestrator.analyze(content, tier="auto")
 ```
 
