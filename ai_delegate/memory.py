@@ -4,7 +4,7 @@ Stores results in SQLite at ~/.ai-delegate/memory.db.
 """
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -22,7 +22,7 @@ class MemoryRecord:
 
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow().isoformat()
+            self.timestamp = datetime.now(timezone.utc).isoformat()
 
 
 class AnalysisMemory:
@@ -45,7 +45,7 @@ class AnalysisMemory:
     def _seed_cli_priors(self, conn: sqlite3.Connection) -> None:
         """Seed cli_performance with CLI_PRIORS if rows don't exist yet."""
         from .constants import CLI_PRIORS
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         for cli_name, task_rates in CLI_PRIORS.items():
             for task_type, win_rate in task_rates.items():
                 existing = conn.execute(
@@ -183,7 +183,7 @@ class AnalysisMemory:
         findings: List[Dict],
     ) -> None:
         """Store individual findings and update FTS5 index."""
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             for f in findings:
                 cursor = conn.execute(
@@ -274,7 +274,7 @@ class AnalysisMemory:
                 "UPDATE analysis_runs SET user_rating = ? WHERE id = ?",
                 (rating, run_id),
             )
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
             if rating == 1:
                 conn.execute(
                     """UPDATE cli_performance
