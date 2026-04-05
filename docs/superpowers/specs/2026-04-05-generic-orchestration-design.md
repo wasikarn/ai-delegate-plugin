@@ -609,26 +609,129 @@ CLI: `ai-delegate catalog [--json] [--domain security] [--trust-all]`
 
 ### File: `ai_delegate/consensus.py`
 
-Extracted from current `debate/orchestrator.py` — pure math, no agent logic.
+Extracted from `debate/orchestrator.py:ConsensusCalculator`. Pure aggregation — reads ExpertResult list, returns ConsensusResult. No mutations on inputs.
 
 ```python
 class ConsensusCalculator:
     @staticmethod
     def calculate(results: list[ExpertResult]) -> ConsensusResult:
-        """Calculate agreement score between expert findings."""
+        """Calculate agreement score between expert findings.
+
+        Contract:
+        - Input: list[ExpertResult] — not modified
+        - Output: ConsensusResult — new object, findings are references (not copies)
+        - Thread-safe: reads only
+
+        Deduplication key: (finding.severity.lower(), finding.issue.lower())
+        Agreement: finding_count / len(results)
+        """
 ```
 
-CLI: `ai-delegate consensus --findings '[...]'`
+### Consensus Role (Pre vs Post-Debate)
 
-Returns: `{score: 0.85, tier: "standard", consensus_findings: [...], disputed_findings: [...]}`
+| Phase | Consensus Used For | Action |
+|-------|-------------------|--------|
+| Pre-debate (after experts run) | **Tier selection only** | Determines FAST / STANDARD / DEEP |
+| Post-debate (after adjudicator) | **Not used** | Adjudicator output is the final verdict |
+
+**FAST tier** exits before debate — returns pre-debate consensus findings directly.
+**STANDARD/DEEP** tiers use adjudicator output (consensus is stale after debate changes findings).
+
+**Sparse topology note:** If `sparse_topology_k` is set (defer to Phase 2), experts see only k peers during debate. Pre-debate consensus is still the correct input to tier selection. Adjudicator output is always the final verdict regardless.
 
 ### Quality Tiers
 
-| Consensus | Tier | Action |
-|-----------|------|--------|
-| ≥ 90% | FAST | Output immediately, no adjudication |
-| 70-90% | STANDARD | Orchestrator synthesis pass |
-| < 70% | DEEP | Spawn adjudicator agent |
+| Consensus Score | Tier | Action |
+|----------------|------|--------|
+| ≥ 90% | FAST | Return pre-debate consensus findings immediately |
+| 70–90% | STANDARD | Orchestrator synthesis pass on adjudicator output |
+| < 70% | DEEP | Spawn adjudicator agent for deep evaluation |
+
+CLI: `ai-delegate consensus --findings '[...]'`
+
+Returns: `{"score": 0.85, "tier": "standard", "consensus_findings": [...], "disputed_findings": [...]}`
+
+---
+
+## FindingsCache
+
+### File: `ai_delegate/cache.py`
+
+Cache key captures content + task + expert selection + models (invalidated if any changes).
+
+```python
+@dataclass
+class CacheKey:
+    content_hash: str          # SHA256(content bytes)
+    task_description: str      # Normalized task description
+    expert_names_hash: str     # SHA256(":".join(sorted(expert_names)))
+    model_versions: str        # SHA256(json.dumps(sorted model assignments))
+
+    def to_str(self) -> str:
+        combined = f"{self.content_hash}:{self.task_description}:{self.expert_names_hash}:{self.model_versions}"
+        return hashlib.sha256(combined.encode()).hexdigest()
+
+@dataclass
+class CacheEntry:
+    consensus: ConsensusResult
+    expert_results: list[ExpertResult]
+    cached_at: float  # time.time()
+
+class FindingsCache:
+    CACHE_DIR = Path.home() / ".cache" / "ai-delegate" / "findings"
+    MAX_AGE_SECONDS = 7 * 24 * 3600  # 7 days
+
+    def get(self, key: CacheKey) -> CacheEntry | None:
+        path = self.CACHE_DIR / key.to_str() / "findings.json"
+        if not path.exists():
+            return None
+        entry = json.loads(path.read_text())
+        age = time.time() - entry["cached_at"]
+        if age > self.MAX_AGE_SECONDS:
+            path.unlink()
+            return None
+        return CacheEntry(
+            consensus=ConsensusResult(**entry["consensus"]),
+            expert_results=[ExpertResult(**r) for r in entry["results"]],
+            cached_at=entry["cached_at"],
+        )
+
+    def set(self, key: CacheKey, entry: CacheEntry) -> None:
+        path = self.CACHE_DIR / key.to_str() / "findings.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({
+            "consensus": entry.consensus.__dict__,
+            "results": [r.to_dict() for r in entry.expert_results],
+            "cached_at": entry.cached_at,
+        }))
+```
+
+CLI: `ai-delegate memory check --content-hash <sha256> --experts X,Y,Z --task "audit"`
+
+Returns: `{"hit": true, "score": 0.92, "age_hours": 2.1}` or `{"hit": false}`
+
+---
+
+## Error Handling Strategy
+
+Orchestrator uses **degraded execution** by default: analysis continues with successful experts, warns if too many fail.
+
+```python
+@dataclass
+class PartialResult:
+    consensus: ConsensusResult
+    expert_results: list[ExpertResult]       # Successful only
+    failed_experts: dict[str, str]           # {name: error_message}
+    success_rate: float                      # len(succeeded) / len(attempted)
+    warning: str | None                      # Set if success_rate < 0.5
+```
+
+Rules:
+
+- If **0 experts succeed** → raise `RuntimeError("All experts failed: ...")`
+- If **< 50% succeed** → return result with `warning = "Only N/M experts succeeded"`
+- If **≥ 50% succeed** → return result normally, no warning
+- Per-expert timeout: 120 seconds (SDK path: 60s from `TimeoutConfig.SDK_CLOUD`)
 
 ---
 
