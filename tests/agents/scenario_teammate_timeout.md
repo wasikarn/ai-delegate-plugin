@@ -37,4 +37,6 @@ as non-vote (not AGREE). 2 AGREE out of 3 = 67% < 80% → **unresolved**.
 ```
 
 **Assertion:** Timeout is treated as non-AGREE. Finding escalates to Adjudicator.
-**Design note:** This ensures timeouts never silently resolve findings.
+**Design note:** `TeammateIdle` hook fires when input expert stops responding.
+Hook policy: idle = non-vote. 2 AGREE out of 3 = 67% < 80% → unresolved.
+This prevents silent experts from inflating consensus scores.

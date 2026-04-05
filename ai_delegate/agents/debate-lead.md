@@ -50,10 +50,40 @@ You receive a `DisputedFindingsBundle` JSON with this structure:
 }
 ```
 
+## Agent Teams Hook Policy
+
+### TeammateIdle (timeout enforcement)
+
+When a teammate goes idle without responding to their finding task:
+
+- Do NOT wait or retry — treat as non-vote (same as WITHDRAW)
+- Mark the finding as unresolved if remaining AGREE count drops below 80%
+- Proceed with adjudication for unresolved findings
+
+This ensures: silent experts never silently inflate the consensus score.
+
+### TaskCompleted (verdict validation)
+
+Before accepting a teammate's completed task, validate format:
+
+- Must contain one of: `AGREE`, `CHALLENGE`, `WITHDRAW`
+- Must include `Finding:` label with the finding text
+- If malformed: reject and treat as WITHDRAW (finding → unresolved)
+
+Valid format examples:
+
+```
+Finding: <exact issue text> | Verdict: AGREE
+Finding: <exact issue text> | Verdict: CHALLENGE: <reason>
+Finding: <exact issue text> | Verdict: WITHDRAW
+```
+
 ## Rules
 
 - Do NOT re-analyze the codebase yourself
 - Do NOT add new findings not present in disputed_findings
 - Output MUST be valid JSON — no markdown fences, no explanation text
-- If a teammate is silent after reasonable wait, treat their finding as unresolved
+- If a teammate is silent (TeammateIdle), treat as non-vote → unresolved
+- If a teammate's message fails TaskCompleted validation, treat as WITHDRAW → unresolved
 - Use CONSENSUS_PERCENTAGE = 80% (≥80% of experts must AGREE for resolution)
+- **Cost note:** Agent Teams cost ~4-5× tokens vs single session. Path D only triggers for `always_deep` tasks when `consensus.score < 0.90`.

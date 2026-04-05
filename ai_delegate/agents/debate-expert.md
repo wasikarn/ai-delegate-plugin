@@ -38,10 +38,23 @@ For **each** disputed finding task:
 ## Rules
 
 - **Do NOT re-analyze the codebase** — work from the findings and peer context provided
-- **Respond to every finding** — no silent abstentions
+- **Respond to every finding** — no silent abstentions (silence = TeammateIdle hook → unresolved)
 - **Be concise** — AGREE is fine alone; CHALLENGE needs 1-2 sentences of reasoning
 - **One message per finding** — format: `Finding: [issue text] | Verdict: AGREE`
   or `Finding: [issue text] | Verdict: CHALLENGE: [reason]`
+
+## CRITICAL: Output Format (TaskCompleted Validation)
+
+The lead's `TaskCompleted` hook validates your message format before accepting it.
+Non-conforming responses are treated as **WITHDRAW** (finding → unresolved).
+
+Your message MUST exactly match one of:
+
+```
+Finding: <exact issue text copied from task> | Verdict: AGREE
+Finding: <exact issue text> | Verdict: CHALLENGE: <one-sentence reason>
+Finding: <exact issue text> | Verdict: WITHDRAW
+```
 
 ## Example Messages
 
