@@ -31,6 +31,8 @@
 
 **Context:** `DebatePhase.run()` currently iterates experts in a sequential `for` loop. With 5 experts x ~300ms per round = ~1.5s wasted. `ExpertRunner.run_parallel()` already shows the correct pattern using `ThreadPoolExecutor.submit` + `as_completed`. We reuse the same shared `ExpertRunner._executor`.
 
+> **Agent Teams cost note (2026-04-05):** Path D (Agent Teams peer debate) costs ~4-5× tokens per teammate vs single session. Parallelizing `DebatePhase.run()` (Path C in-session debate) partially offsets this — Path C should be the default tier before falling back to Path D Agent Teams. This task makes Path C competitive with Path D on latency while being 4-5× cheaper on tokens.
+
 - [ ] **Step 1: Write the failing test**
 
 ```python
@@ -825,7 +827,7 @@ Expected: All tests pass, coverage >= 97%.
 pytest tests/ --co -q 2>&1 | tail -5
 ```
 
-Expected: >= 484 tests collected.
+Expected: >= 628 tests collected (baseline before this plan's additions).
 
 ---
 

@@ -6,7 +6,9 @@
 
 **Architecture:** Two new optional fields on `TaskConfig` drive both features. A module-level `_resolve_client()` helper in `orchestrator.py` handles per-expert client selection for heterogeneous models. `DebatePhase` gets a `_select_peers()` method and conditional findings routing for sparse topology. All defaults maintain backward compatibility.
 
-**Tech Stack:** Python 3.10+, dataclasses, `concurrent.futures.ThreadPoolExecutor`, `OllamaClient`
+**Tech Stack:** Python 3.10+, dataclasses, `concurrent.futures.ThreadPoolExecutor`, `BackendClient`
+
+> **⚠️ Updated (2026-04-05):** `BackendClient` was renamed to `BackendClient` (Task A in `python-design-patterns-refactor.md`). All references below use `BackendClient`. Also: **sparse topology** (`sparse_topology_k`) maps directly to Agent Teams **Mailbox selective messaging** — instead of broadcasting all findings to all peers, each expert only receives k peers' mailbox messages. If Path D (Agent Teams debate) is enabled, sparse topology reduces the per-teammate context cost. At k=2 with 5 experts, token cost drops ~3×.
 
 ---
 
@@ -121,7 +123,7 @@ class TestHeterogeneousModels:
         """_resolve_client returns base_client when expert not in expert_models."""
         from ai_delegate.debate.orchestrator import _resolve_client
 
-        base_client = Mock(spec=OllamaClient)
+        base_client = Mock(spec=BackendClient)
         base_client.model = "kimi-k2.5:cloud"
         config = TaskConfig.from_task_type("audit")  # expert_models = {}
 
@@ -133,7 +135,7 @@ class TestHeterogeneousModels:
         """_resolve_client returns base_client when expert model matches base."""
         from ai_delegate.debate.orchestrator import _resolve_client
 
-        base_client = Mock(spec=OllamaClient)
+        base_client = Mock(spec=BackendClient)
         base_client.model = "gpt-4o"
         config = TaskConfig.from_task_type("audit")
         config.expert_models = {"owasp": "gpt-4o"}  # Same as base
@@ -143,10 +145,10 @@ class TestHeterogeneousModels:
         assert result is base_client
 
     def test_resolve_client_creates_new_client_for_different_model(self):
-        """_resolve_client creates new OllamaClient when expert has different model."""
+        """_resolve_client creates new BackendClient when expert has different model."""
         from ai_delegate.debate.orchestrator import _resolve_client
 
-        base_client = Mock(spec=OllamaClient)
+        base_client = Mock(spec=BackendClient)
         base_client.model = "kimi-k2.5:cloud"
         base_client.fallback_model = "sonnet"
         base_client.cli_type = "ollama"
@@ -154,8 +156,8 @@ class TestHeterogeneousModels:
         config = TaskConfig.from_task_type("audit")
         config.expert_models = {"owasp": "gpt-4o"}
 
-        with patch("ai_delegate.debate.orchestrator.OllamaClient") as MockClient:
-            MockClient.return_value = Mock(spec=OllamaClient)
+        with patch("ai_delegate.debate.orchestrator.BackendClient") as MockClient:
+            MockClient.return_value = Mock(spec=BackendClient)
             result = _resolve_client(base_client, config, "owasp")
 
             MockClient.assert_called_once_with(
@@ -173,22 +175,22 @@ class TestHeterogeneousModels:
         def track_model(prompt):
             return {"findings": []}
 
-        base_client = Mock(spec=OllamaClient)
+        base_client = Mock(spec=BackendClient)
         base_client.model = "kimi-k2.5:cloud"
         base_client.fallback_model = "sonnet"
         base_client.cli_type = "ollama"
         base_client.verbose = False
         base_client.run_json.side_effect = track_model
 
-        with patch("ai_delegate.debate.orchestrator.OllamaClient") as MockClient:
-            per_expert_client = Mock(spec=OllamaClient)
+        with patch("ai_delegate.debate.orchestrator.BackendClient") as MockClient:
+            per_expert_client = Mock(spec=BackendClient)
             per_expert_client.run_json.return_value = {"findings": []}
             MockClient.return_value = per_expert_client
 
             runner = ExpertRunner(base_client, audit_config_with_models)
             runner.run_parallel("test code")
 
-            # OllamaClient should have been constructed once (for owasp override)
+            # BackendClient should have been constructed once (for owasp override)
             MockClient.assert_called_once_with(
                 model="gpt-4o",
                 fallback_model="sonnet",
@@ -211,15 +213,15 @@ In `ai_delegate/debate/orchestrator.py`, after `build_findings()` (after line 54
 
 ```python
 def _resolve_client(
-    base_client: "OllamaClient",
+    base_client: "BackendClient",
     task_config: "TaskConfig",
     expert_name: str,
-) -> "OllamaClient":
+) -> "BackendClient":
     """
     Return the appropriate client for an expert.
 
     If task_config.expert_models has a model override for this expert AND it
-    differs from the base client's model, create and return a new OllamaClient
+    differs from the base client's model, create and return a new BackendClient
     with the override model. Otherwise return base_client unchanged.
 
     Args:
@@ -228,12 +230,12 @@ def _resolve_client(
         expert_name: Name of the expert (e.g., "owasp", "auth")
 
     Returns:
-        base_client if no override; new OllamaClient if override differs
+        base_client if no override; new BackendClient if override differs
     """
     model = task_config.expert_models.get(expert_name)
     if not model or model == getattr(base_client, "model", None):
         return base_client
-    return OllamaClient(
+    return BackendClient(
         model=model,
         fallback_model=getattr(base_client, "fallback_model", "sonnet"),
         verbose=getattr(base_client, "verbose", False),
@@ -319,7 +321,7 @@ class TestSparseTopology:
 
     @pytest.fixture
     def mock_client(self) -> Any:
-        client = Mock(spec=OllamaClient)
+        client = Mock(spec=BackendClient)
         client.run_json.return_value = {
             "findings": [{"severity": "high", "issue": "Test"}]
         }
@@ -587,7 +589,7 @@ Expected: All PASSED.
 pytest tests/ -x -q
 ```
 
-Expected: All tests pass. Count should be ≥ 489 (485 existing + new tests).
+Expected: All tests pass. Count should be ≥ 643 (628 existing + new tests).
 
 - [ ] **Step 7: Commit**
 

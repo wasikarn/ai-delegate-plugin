@@ -8,6 +8,16 @@
 
 **Tech Stack:** Python 3.10+ dataclasses, `json`, Claude Code Agent Teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`), kimi-k2.5:cloud (debate experts), Sonnet (debate lead), pytest.
 
+> **⚠️ Agent Teams Article Update (2026-04-05):** Claude Code Agent Teams use a **Shared Task List + Mailbox** for peer-to-peer communication — distinct from parent-child sub-agents. Key mechanics:
+>
+> - **TeammateIdle hook**: fires when a teammate stops responding — use to enforce the "silent = non-AGREE" timeout policy (see `scenario_teammate_timeout.md`). Without this hook, the lead must busy-poll, which wastes tokens.
+> - **TaskCompleted hook**: fires when a teammate marks a task done — use to validate `AGREE|CHALLENGE|WITHDRAW` format before the lead reads the result. Prevents malformed verdicts from silently passing.
+> - **Cost**: Agent Teams cost ~4-5× tokens vs single session. Path D MUST only trigger for `always_deep` tasks (audit, architecture, migrate) when `consensus.score < 0.90`.
+> - **No nested teams**: debate-lead cannot spawn sub-teams. Single-level team only.
+> - **Separate context**: each teammate (kimi-k2.5:cloud) has its own context window — they do NOT share the lead's session history.
+>
+> **Task 8** below adds the hooks that enforce these policies in the agent files.
+
 ---
 
 ## File Structure
@@ -848,6 +858,77 @@ git commit -m "docs: update CHANGELOG with Phase 1C Path D peer debate component
 
 ---
 
+## Task 8: Add Agent Teams Hooks — Timeout Enforcement + Verdict Validation
+
+**Files:**
+
+- Modify: `ai_delegate/agents/debate-lead.md` — add `TeammateIdle` + `TaskCompleted` hook guidance
+- Modify: `ai_delegate/agents/debate-expert.md` — add format enforcement note
+- Modify: `tests/agents/scenario_teammate_timeout.md` — update design note to reference TeammateIdle
+
+**Context:** Claude Code fires `TeammateIdle` when a teammate stops responding and `TaskCompleted` when a teammate marks a task done. These are the correct enforcement points — not busy-polling in the lead prompt.
+
+- [ ] **Step 1: Add TeammateIdle policy to `debate-lead.md`**
+
+In `ai_delegate/agents/debate-lead.md`, add this section after the existing "Timeout Handling" (or "Failure Modes") section:
+
+```markdown
+## Agent Teams Hook Policy
+
+### TeammateIdle (timeout enforcement)
+When a teammate goes idle without responding to their finding task:
+- Do NOT wait or retry — treat as non-vote (same as WITHDRAW)
+- Mark the finding as unresolved if remaining AGREE count drops below 80%
+- Proceed with adjudication for unresolved findings
+
+This ensures: silent experts never silently inflate consensus score.
+
+### TaskCompleted (verdict validation)
+Before accepting a teammate's completed task, validate format:
+- Must contain one of: `AGREE`, `CHALLENGE`, `WITHDRAW`
+- Must include `Finding:` label with the finding text
+- If malformed: reject and treat as WITHDRAW (finding → unresolved)
+
+Valid format examples:
+  Finding: <exact issue text> | Verdict: AGREE
+  Finding: <exact issue text> | Verdict: CHALLENGE: <reason>
+  Finding: <exact issue text> | Verdict: WITHDRAW
+```
+
+- [ ] **Step 2: Add format enforcement note to `debate-expert.md`**
+
+In `ai_delegate/agents/debate-expert.md`, update the output section to add:
+
+```markdown
+## CRITICAL: Output Format
+
+Non-conforming responses will be rejected by the lead's TaskCompleted hook
+and treated as WITHDRAW (finding → unresolved). Your response MUST use exactly:
+
+  Finding: <exact issue text copied from task> | Verdict: AGREE
+  Finding: <exact issue text> | Verdict: CHALLENGE: <one-sentence reason>
+  Finding: <exact issue text> | Verdict: WITHDRAW
+```
+
+- [ ] **Step 3: Update `scenario_teammate_timeout.md` to reference TeammateIdle hook**
+
+In `tests/agents/scenario_teammate_timeout.md`, replace the last `**Design note:**` line with:
+
+```markdown
+**Design note:** `TeammateIdle` hook fires when input expert stops responding.
+Hook policy: idle = non-vote. 2 AGREE out of 3 = 67% < 80% → unresolved.
+This prevents silent experts from inflating consensus scores.
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add ai_delegate/agents/debate-lead.md ai_delegate/agents/debate-expert.md tests/agents/scenario_teammate_timeout.md
+git commit -m "docs: add Agent Teams hook policies to debate agent files (TeammateIdle + TaskCompleted)"
+```
+
+---
+
 ## Final Verification
 
 - [ ] **Run full test suite**
@@ -856,7 +937,7 @@ git commit -m "docs: update CHANGELOG with Phase 1C Path D peer debate component
 python -m pytest tests/test_models.py tests/test_debate_runner.py tests/test_catalog.py -v --no-header
 ```
 
-Expected: all tests pass (was 102 before this plan; should be ~113 after adding 11 new tests)
+Expected: all tests pass (was 628 before this plan; Task 8 adds no new Python tests)
 
 - [ ] **Verify exports work end-to-end**
 

@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix 4 design smells — encapsulation violation, misleading name, incomplete factory, dead abstraction — without changing any runtime behavior.
+**Goal:** Fix 3 design smells — encapsulation violation, misleading name, incomplete factory — without changing any runtime behavior. (Task D — supervisor.py dead abstraction — was adjudicated for deletion instead of rename; see note below.)
 
-**Architecture:** Four independent surgical fixes applied in order B→C→D→A. Each fix is isolated to 1-2 files and must not change observable behavior. All 500 existing tests must pass after every task.
+**Architecture:** Three independent surgical fixes applied in order B→C→A. Each fix is isolated to 1-2 files and must not change observable behavior. All 628 existing tests must pass after every task.
 
-**Tech Stack:** Python 3.14, pytest, dataclasses, ThreadPoolExecutor
+**Tech Stack:** Python 3.10+, pytest, dataclasses, ThreadPoolExecutor
+
+> **⚠️ Task D removed (2026-04-05):** Multi-expert adjudication verdict: `supervisor.py` (259 lines) is dead code — never called anywhere in the codebase. Delete it entirely rather than renaming `delegate()`. `tests/test_supervisor.py` should also be deleted. Do NOT implement the `execute_task()` rename — it would add tests for code that gets deleted next cycle.
 
 ---
 
@@ -16,7 +18,7 @@
 |------|--------|------|
 | B | `ai_delegate/debate/orchestrator.py` | `tests/test_orchestrator.py` |
 | C | `ai_delegate/models.py` | `tests/test_models.py` |
-| D | `ai_delegate/supervisor.py` | `tests/test_supervisor.py` |
+| ~~D~~ | ~~`ai_delegate/supervisor.py`~~ | ~~SKIPPED — delete supervisor.py instead~~ |
 | A | `ai_delegate/client.py`, `ai_delegate/__init__.py`, `ai_delegate/debate/orchestrator.py`, `ai_delegate/cli.py`, 5 test files | — (rename only) |
 
 ---
@@ -208,7 +210,21 @@ git commit -m "refactor: add expert_models/sparse_topology_k params to TaskConfi
 
 ---
 
-## Task 3 (Fix D): Rename `Supervisor.delegate()` → `execute_task()`
+## ~~Task 3 (Fix D): SKIPPED — Delete supervisor.py instead~~
+
+> **Adjudication verdict**: `supervisor.py` is dead code (0 callers). Deleting it is cleaner than renaming. Run:
+>
+> ```bash
+> trash ai_delegate/supervisor.py tests/test_supervisor.py
+> git add -A
+> git commit -m "refactor: delete supervisor.py and test_supervisor.py (dead code, 0 callers)"
+> ```
+>
+> Then proceed directly to Task 4 (Fix A).
+
+---
+
+## ~~Original Task 3 (Fix D): Rename `Supervisor.delegate()` → `execute_task()`~~ (SKIPPED)
 
 **Files:**
 
@@ -509,7 +525,7 @@ No new behavior — only encapsulation, naming, and API surface changes. After e
 python -m pytest tests/ -x -q --tb=short
 ```
 
-All 500 tests must pass. If coverage drops below 97%, something was deleted unintentionally.
+All 628 tests must pass (minus test_supervisor.py if Task D deletion is done). If coverage drops below 97%, something was deleted unintentionally.
 
 ```bash
 python -m pytest tests/ --cov=ai_delegate --cov-report=term-missing | tail -5
