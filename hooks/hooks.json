@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -c \"import ai_delegate\" 2>/dev/null || pip install -e \"${CLAUDE_PLUGIN_ROOT}\" --break-system-packages --quiet",
+            "command": "python3 -c \"import ai_delegate\" 2>/dev/null || pip3 install -e \"${CLAUDE_PLUGIN_ROOT}\" --break-system-packages --quiet",
             "timeout": 30,
             "statusMessage": "Checking ai-delegate installation..."
           }

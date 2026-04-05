@@ -31,7 +31,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     performance-expert)
         CONTEXT="You are analyzing code for performance issues.
@@ -45,7 +45,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     architecture-expert)
         CONTEXT="You are analyzing code architecture.
@@ -59,7 +59,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     refactor-expert)
         CONTEXT="You are analyzing code for refactoring opportunities.
@@ -73,7 +73,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     migrate-expert)
         CONTEXT="You are analyzing code migration risks.
@@ -87,7 +87,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     testing-expert)
         CONTEXT="You are analyzing test coverage and quality.
@@ -101,7 +101,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     code-quality-expert)
         CONTEXT="You are analyzing code quality and maintainability.
@@ -115,7 +115,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     database-expert)
         CONTEXT="You are analyzing database schema, queries, and migrations.
@@ -129,7 +129,7 @@ OUTPUT FORMAT (JSON):
 5. score - Confidence score (0-100)
 6. detailed_findings - Full analysis (BOTTOM)
 
-Project context: See ${CWD}/package.json for framework details."
+Project context: See ${CWD}/pyproject.toml for stack details."
         ;;
     *)
         exit 0

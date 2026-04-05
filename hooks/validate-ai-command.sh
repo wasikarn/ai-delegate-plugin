@@ -18,7 +18,7 @@ if [ "$EXECUTABLE" != "ai-delegate" ]; then
 fi
 
 # Valid tasks
-VALID_TASKS="audit|analyze|architecture|refactor|migrate|review"
+VALID_TASKS="audit|analyze|architecture|refactor|migrate|review|test|quality|database"
 
 # Allow meta flags (--version, --help, -h, -V)
 if echo "$COMMAND" | grep -qE "ai-delegate\s+(--version|--help|-h|-V)"; then
@@ -31,7 +31,7 @@ if ! echo "$COMMAND" | grep -qE "ai-delegate\s+($VALID_TASKS)(\s|$)"; then
         hookSpecificOutput: {
             hookEventName: "PreToolUse",
             permissionDecision: "deny",
-            permissionDecisionReason: "Invalid ai-delegate task. Valid tasks: audit, analyze, architecture, refactor, migrate, review"
+            permissionDecisionReason: "Invalid ai-delegate task. Valid tasks: audit, analyze, architecture, refactor, migrate, review, test, quality, database"
         }
     }'
     exit 0

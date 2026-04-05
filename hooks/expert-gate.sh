@@ -18,7 +18,7 @@ fi
 
 # Only check for expert agents
 case "$AGENT_TYPE" in
-    security-expert|performance-expert|architecture-expert)
+    security-expert|performance-expert|architecture-expert|refactor-expert|migrate-expert|testing-expert|code-quality-expert|database-expert)
         ;;
     *)
         exit 0

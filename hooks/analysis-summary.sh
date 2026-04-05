@@ -1,6 +1,6 @@
 #!/bin/bash
-# analysis-summary.sh - Generate summary of analysis session
-# Reports findings from ai-delegate debate session
+# analysis-summary.sh - Log analysis session summary to stderr on session end
+# Stop hook: must exit 0 silently (no hookSpecificOutput — invalid for Stop event)
 
 set -euo pipefail
 
@@ -21,22 +21,11 @@ if ! grep -q "ai-delegate" "$TRANSCRIPT_PATH" 2>/dev/null; then
 fi
 
 # Count findings by severity (rough estimation from transcript)
-HIGH_COUNT=$(grep -c "high\|critical" "$TRANSCRIPT_PATH" 2>/dev/null || echo "0")
-MEDIUM_COUNT=$(grep -c "medium" "$TRANSCRIPT_PATH" 2>/dev/null || echo "0")
-LOW_COUNT=$(grep -c "low\|info" "$TRANSCRIPT_PATH" 2>/dev/null || echo "0")
+HIGH_COUNT=$(grep -c '"severity":\s*"high"\|"severity":\s*"critical"' "$TRANSCRIPT_PATH" 2>/dev/null || echo "0")
+MEDIUM_COUNT=$(grep -c '"severity":\s*"medium"' "$TRANSCRIPT_PATH" 2>/dev/null || echo "0")
+LOW_COUNT=$(grep -c '"severity":\s*"low"' "$TRANSCRIPT_PATH" 2>/dev/null || echo "0")
 
-# Build summary
-SUMMARY="Analysis session summary: "
-if [ "$HIGH_COUNT" -gt 0 ] || [ "$MEDIUM_COUNT" -gt 0 ] || [ "$LOW_COUNT" -gt 0 ]; then
-    SUMMARY="$SUMMARY Findings: HIGH=$HIGH_COUNT, MEDIUM=$MEDIUM_COUNT, LOW=$LOW_COUNT"
-else
-    SUMMARY="$SUMMARY No significant findings"
-fi
+# Log to stderr (Stop hook must not write to stdout)
+echo "[ai-delegate] Session summary: HIGH=${HIGH_COUNT} MEDIUM=${MEDIUM_COUNT} LOW=${LOW_COUNT}" >&2
 
-# Output summary
-jq -n --arg summary "$SUMMARY" '{
-    hookSpecificOutput: {
-        hookEventName: "Stop",
-        additionalContext: $summary
-    }
-}'
+exit 0
