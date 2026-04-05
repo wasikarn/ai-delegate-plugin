@@ -72,15 +72,6 @@ def run_analysis(
     # Create task config
     config = create_task_config(task_type)
 
-    # Load custom expert plugins
-    from .plugin_registry import PluginRegistry
-    registry = PluginRegistry()
-    custom_experts = registry.for_task(task_type)
-    for plugin in custom_experts:
-        config.experts.update(plugin.to_expert_dict())
-    if custom_experts and verbose:
-        print(f"Loaded {len(custom_experts)} custom expert(s): {[p.name for p in custom_experts]}")
-
     # Override model if specified
     if model:
         config.default_model = model
