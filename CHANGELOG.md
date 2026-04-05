@@ -5,6 +5,32 @@ All notable changes to ai-delegate-plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Phase 1A Foundation — Pure Module Extraction
+
+- **consensus.py** — Standalone `ConsensusCalculator` extracted from `debate/orchestrator.py`
+  - `ConsensusCalculator.calculate(expert_results)` — computes consensus/disputed/unique findings
+  - `normalize_finding(raw_dict)` — translates domain-format dicts to canonical `Finding` objects
+  - Case-insensitive deduplication by `(severity.lower(), issue.lower())`
+- **complexity.py** — Deterministic `ComplexityAssessor` for content complexity scoring
+  - `ComplexityAssessor.assess(content)` — rule-based scoring: line count + keyword signals
+  - `ComplexityAssessor.assess_files(paths)` — aggregates across multiple files
+  - `ComplexityScore` dataclass: level, domains, file_count, line_count, security_signals
+  - Security signals > 5 bumps low → medium level
+- **catalog.py** — `AgentCatalog` for discovering agent definitions across installed plugins
+  - Scans `~/.claude/plugins/*/agents/*.md` for agent frontmatter
+  - S1: Agent name validation (regex `[a-zA-Z0-9_-]+`, command injection prevention)
+  - S2: Plugin trust boundary via `~/.claude/ai-delegate-trust.json` allowlist
+  - S3: Path traversal prevention via `resolve()` + `is_relative_to()`
+  - S4: DoS protection — 100 agent cap, 5s timeout (SIGALRM/Unix), 4096-byte frontmatter limit
+  - `AgentCatalog.for_domains(domains)` — filter agents by detected domain keywords
+  - `DOMAIN_KEYWORDS` — 7 domains: security, performance, architecture, code-quality, testing, migration, database
+
+---
+
 ## [0.0.2] - 2026-04-04
 
 ### Added

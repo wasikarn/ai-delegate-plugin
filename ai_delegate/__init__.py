@@ -18,9 +18,11 @@ from .config import (
     EXPERT_CONFIGS,
 )
 from .models import Finding, Verdict, ExpertResult, ConsensusResult, TaskConfig, Tier
+from .consensus import ConsensusCalculator, normalize_finding
+from .complexity import ComplexityAssessor, ComplexityScore
+from .catalog import AgentCatalog, AgentMetadata, DOMAIN_KEYWORDS
 from .debate.orchestrator import (
     DebateOrchestrator,
-    ConsensusCalculator,
     ExpertRunner,
     Adjudicator,
     DebatePhase,
@@ -63,9 +65,18 @@ __all__ = [
     "ConsensusResult",
     "TaskConfig",
     "Tier",
+    # Consensus
+    "ConsensusCalculator",
+    "normalize_finding",
+    # Complexity
+    "ComplexityAssessor",
+    "ComplexityScore",
+    # Catalog
+    "AgentCatalog",
+    "AgentMetadata",
+    "DOMAIN_KEYWORDS",
     # Orchestrator components
     "DebateOrchestrator",
-    "ConsensusCalculator",
     "ExpertRunner",
     "Adjudicator",
     "DebatePhase",
