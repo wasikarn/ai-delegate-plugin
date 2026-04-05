@@ -187,65 +187,245 @@ def _scan_with_timeout(self) -> list[AgentMetadata]:
 
 ---
 
-## Intelligence Layer — Orchestrator Agent
+## Intelligence Layer
 
-### File: `agents/orchestrator.md`
+The orchestrator has two layers:
 
-The orchestrator is a Claude Code agent (NOT a Python class). It runs once per task and makes all routing decisions.
+1. **Python services** (testable, deterministic) — handle all decision logic
+2. **`agents/orchestrator.md`** (Claude Code agent) — coordinates services, synthesizes results
 
-### Step 1 — Complexity Assessment
+The orchestrator agent calls Python CLI commands and the Agent tool. It does NOT implement decision logic itself — that lives in Python.
 
-Before selecting experts, assess:
+### Python Services (New Files)
 
-- **Content type**: code / markdown / YAML / SQL / diff / prose
-- **Size**: line count, file count
-- **Domain signals**: auth code → security, SQL → database, architecture files → patterns
-- **Task description**: explicit keywords ("security", "review", "explain")
+#### `ai_delegate/complexity.py` — ComplexityAssessor
 
-Output: `complexity = {level: low|medium|high, domains: [...], file_count: N}`
+Assesses content complexity using deterministic rules (no AI reasoning).
 
-### Step 2 — Expert Selection
+```python
+@dataclass
+class ComplexityScore:
+    level: str           # "low" | "medium" | "high"
+    domains: list[str]   # detected domain keywords
+    file_count: int
+    line_count: int
+    security_signals: int  # count of security-relevant terms
 
-Call `ai-delegate catalog --json` to get all available agents. Select experts by:
+class ComplexityAssessor:
+    # Domain keyword detection (same as AgentCatalog)
+    SECURITY_TERMS = {"password", "token", "secret", "crypto", "hash", "jwt", "oauth",
+                      "auth", "session", "cookie", "cert", "ssl", "tls"}
+    PERF_TERMS     = {"query", "n+1", "cache", "index", "latency", "timeout", "async"}
+    ARCH_TERMS     = {"interface", "abstract", "factory", "singleton", "dependency",
+                      "coupling", "cohesion", "pattern", "service", "repository"}
 
-1. **Domain match**: expert `description` covers the detected domains
-2. **No overlap**: don't select two experts with the same domain focus
-3. **Count by complexity**:
-   - LOW → 2 experts max
-   - MEDIUM → 3 experts
-   - HIGH → 4-5 experts
-4. **User override**: if `--agents` specified, use that list directly (skip selection)
+    @staticmethod
+    def assess(content: str, filename: str = "") -> ComplexityScore:
+        lines = content.splitlines()
+        line_count = len(lines)
+        content_lower = content.lower()
 
-### Step 3 — Model & Path Assignment
+        # Level by line count (from ComplexityThresholds in constants.py)
+        if line_count < ComplexityThresholds.LOW_LINES:       # 100
+            level = "low"
+        elif line_count < ComplexityThresholds.MEDIUM_LINES:  # 500
+            level = "medium"
+        else:
+            level = "high"
 
-Per expert, assign:
+        # Domain detection
+        domains = []
+        sec_count = sum(content_lower.count(t) for t in ComplexityAssessor.SECURITY_TERMS)
+        if sec_count > 0:
+            domains.append("security")
+            if sec_count > 5:
+                level = max(level, "medium", key=lambda l: ["low","medium","high"].index(l))
+        if any(t in content_lower for t in ComplexityAssessor.PERF_TERMS):
+            domains.append("performance")
+        if any(t in content_lower for t in ComplexityAssessor.ARCH_TERMS):
+            domains.append("architecture")
 
-| Task type | Execution path | Model |
-|-----------|---------------|-------|
-| Pattern matching, secret detection | SDK path | GLM-5 / Kimi via Ollama |
-| Code exploration (needs file access) | Launch path | Kimi via `ollama launch claude` |
-| Deep reasoning, architecture | Claude Code agent | Sonnet |
-| Fast multimodal | Gemini CLI | gemini-2.0-flash |
+        return ComplexityScore(
+            level=level,
+            domains=domains,
+            file_count=1,
+            line_count=line_count,
+            security_signals=sec_count,
+        )
 
-**Decision rule:**
-
-- Does the expert need to READ files itself? → Launch path
-- Is it pattern/text analysis on content we provide? → SDK path
-- Does it require Claude-level reasoning? → Claude Code agent
-
-### Step 4 — Progressive Escalation
-
+    @staticmethod
+    def assess_files(paths: list[Path]) -> ComplexityScore:
+        """Aggregate complexity across multiple files."""
+        scores = [ComplexityAssessor.assess(p.read_text(), p.name) for p in paths]
+        all_domains = list({d for s in scores for d in s.domains})
+        levels = ["low", "medium", "high"]
+        max_level = max((s.level for s in scores), key=lambda l: levels.index(l))
+        return ComplexityScore(
+            level=max_level,
+            domains=all_domains,
+            file_count=len(paths),
+            line_count=sum(s.line_count for s in scores),
+            security_signals=sum(s.security_signals for s in scores),
+        )
 ```
-Round 1: 2 cheapest experts → consensus ≥90%? → FAST exit
-Round 2: add more experts → consensus ≥70%? → STANDARD exit
-Round 3: adjudicator synthesis → DEEP verdict
+
+CLI: `ai-delegate assess --file src/auth.py` → `{"level": "medium", "domains": ["security"]}`
+
+#### `ai_delegate/selector.py` — ExpertSelector
+
+Selects minimum expert set for given complexity + domains.
+
+```python
+MAX_EXPERTS_BY_LEVEL = {"low": 2, "medium": 3, "high": 5}
+
+class ExpertSelector:
+    def __init__(self, catalog: AgentCatalog):
+        self._catalog = catalog
+
+    def select(
+        self,
+        complexity: ComplexityScore,
+        user_agents: list[str] | None = None,
+    ) -> list[AgentMetadata]:
+        """Select minimum experts for maximum coverage.
+
+        If user_agents is given, use those directly (skip selection).
+        Otherwise, select by domain match + no overlap + count cap.
+        """
+        if user_agents is not None:
+            all_agents = {a.name: a for a in self._catalog.scan()}
+            return [all_agents[n] for n in user_agents if n in all_agents]
+
+        candidates = self._catalog.for_domains(complexity.domains)
+        if not candidates:
+            candidates = self._catalog.scan()  # fallback: all agents
+
+        # Deduplicate by domain: one expert per domain group
+        seen_domains: set[str] = set()
+        selected: list[AgentMetadata] = []
+        for agent in candidates:
+            new_domains = set(agent.domains) - seen_domains
+            if new_domains:
+                selected.append(agent)
+                seen_domains.update(new_domains)
+
+        # Cap by complexity level
+        max_count = MAX_EXPERTS_BY_LEVEL[complexity.level]
+        return selected[:max_count]
 ```
 
-**Early exit**: if first 2 experts agree 100% → don't spawn remaining experts.
+#### `ai_delegate/path_selector.py` — ModelAssigner
 
-### Step 5 — Cache Check (before execution)
+Assigns execution path (A or C) and model per expert. Replaces `SmartRouter` routing logic.
 
-Call `ai-delegate memory check --content-hash <hash>` — if unchanged from last run, reuse findings (skip expert execution entirely).
+```python
+class ExecutionPath(str, Enum):
+    SDK    = "sdk"    # Path A: fast, no file access
+    AGENT  = "agent"  # Path C: deep reasoning + tools
+
+@dataclass
+class ExpertAssignment:
+    agent: AgentMetadata
+    path: ExecutionPath
+    model: str
+
+FILE_ACCESS_TOOLS = {"Read", "Glob", "Grep", "Bash"}
+DEEP_DOMAINS = {"architecture", "migration"}
+
+class ModelAssigner:
+    @staticmethod
+    def assign(
+        agent: AgentMetadata,
+        complexity: ComplexityScore,
+        model_overrides: dict[str, str] | None = None,
+    ) -> ExpertAssignment:
+        """Assign execution path + model for one expert.
+
+        Decision rules (in order):
+        1. If agent.tools intersects FILE_ACCESS_TOOLS → Path C (needs file system)
+        2. If agent.domains intersects DEEP_DOMAINS → Path C (deep reasoning)
+        3. If complexity.level == "high" → Path C (escalate for complex content)
+        4. Otherwise → Path A (SDK, fast pattern analysis)
+        """
+        overrides = model_overrides or {}
+
+        needs_file_access = bool(set(agent.tools) & FILE_ACCESS_TOOLS)
+        needs_deep_reasoning = bool(set(agent.domains) & DEEP_DOMAINS)
+        is_complex = complexity.level == "high"
+
+        if needs_file_access or needs_deep_reasoning or is_complex:
+            path = ExecutionPath.AGENT
+            default_model = agent.model or Models.SONNET
+        else:
+            path = ExecutionPath.SDK
+            default_model = agent.model or Models.KIMI_K25_CLOUD
+
+        model = overrides.get(agent.name, default_model)
+        return ExpertAssignment(agent=agent, path=path, model=model)
+
+    @staticmethod
+    def assign_all(
+        agents: list[AgentMetadata],
+        complexity: ComplexityScore,
+        model_overrides: dict[str, str] | None = None,
+    ) -> list[ExpertAssignment]:
+        return [ModelAssigner.assign(a, complexity, model_overrides) for a in agents]
+```
+
+CLI: `ai-delegate assign --agents security-expert,arch-expert --complexity medium --json`
+
+#### Progressive Escalation State Machine
+
+```python
+ESCALATION_ROUNDS = [
+    {"count": 2, "budget_tokens": 4000},   # Round 1: cheapest 2
+    {"count": 2, "budget_tokens": 8000},   # Round 2: +2 more
+    {"count": 999, "budget_tokens": 16000}, # Round 3: all remaining
+]
+CONSENSUS_FAST_THRESHOLD = QualityThresholds.FAST_THRESHOLD / 100  # 0.90
+
+def run_progressive(
+    assignments: list[ExpertAssignment],
+    executor: Callable,
+    consensus_calc: ConsensusCalculator,
+) -> tuple[ConsensusResult, list[ExpertResult]]:
+    """Run experts progressively. Exit early on FAST consensus."""
+    results: list[ExpertResult] = []
+    remaining = list(assignments)
+
+    for round_cfg in ESCALATION_ROUNDS:
+        batch = remaining[:round_cfg["count"]]
+        remaining = remaining[round_cfg["count"]:]
+
+        for assignment in batch:
+            result = executor(assignment)
+            results.append(result)
+
+        consensus = consensus_calc.calculate(results)
+        if consensus.score >= CONSENSUS_FAST_THRESHOLD:
+            return consensus, results  # Early exit
+
+        if not remaining:
+            break
+
+    return consensus_calc.calculate(results), results
+```
+
+### `agents/orchestrator.md` — Claude Code Agent
+
+The orchestrator agent coordinates Python services. It does **not** implement decision logic.
+
+**Step 1:** Call `ai-delegate assess` → get `complexity`
+**Step 2:** Call `ai-delegate catalog --json` → get agent list
+**Step 3:** Call `ai-delegate assign --json` → get assignments (path + model per expert)
+**Step 4:** Check cache: `ai-delegate memory check --content-hash <hash>`
+**Step 5:** Execute experts via `run_progressive`:
+
+- Path A assignments → `ai-delegate run-expert --path sdk --agent X --model Y`
+- Path C assignments → `Agent(subagent_type="<plugin>:<name>", prompt="...")`
+
+**Step 6:** Call `ai-delegate consensus --findings <json>` → get tier
+**Step 7:** FAST → output directly; STANDARD/DEEP → synthesis pass
 
 ---
 
