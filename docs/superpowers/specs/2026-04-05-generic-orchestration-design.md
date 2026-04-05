@@ -759,6 +759,33 @@ All experts MUST return findings in this format:
 - `severity` and `issue` required; all other fields optional
 - Unknown fields ignored (forward compatible)
 
+#### Existing Agent Compatibility
+
+Existing agents in `agents/*.md` return a domain-specific format:
+
+```json
+{
+  "domain": "security",
+  "findings": [{"severity": "high", "category": "OWASP-A01", "title": "...", "file": "...", "line": 42, "description": "...", "recommendation": "..."}],
+  "score": 75
+}
+```
+
+The Findings Contract v1.0 is the **canonical format for new agents and external plugins**. For existing agents, `consensus.py` translates from domain format to contract format:
+
+```python
+def normalize_finding(raw: dict) -> Finding:
+    """Convert domain-specific finding dict to canonical Finding."""
+    return Finding(
+        severity=raw.get("severity", "medium"),
+        issue=raw.get("title") or raw.get("issue", ""),
+        location=f"{raw.get('file', '')}:{raw.get('line', '')}" if raw.get("file") else raw.get("location"),
+        recommendation=raw.get("recommendation"),
+    )
+```
+
+Both formats are supported. `schema_version: "1.0"` presence indicates the canonical format.
+
 ---
 
 ## Python Utilities — What Changes
@@ -768,28 +795,39 @@ All experts MUST return findings in this format:
 | File | Change |
 |------|--------|
 | `client.py` | Keep BackendClient — used for SDK path execution |
-| `models.py` | Simplify — remove TaskConfig preset fields, keep Finding/ExpertResult/ConsensusResult/Verdict |
-| `constants.py` | Remove TaskTypes, keep QualityThresholds/TimeoutConfig/RetryConfig |
-| `memory.py` | Keep — cache-first + regression detection |
-| `party_mode.py` | Keep — reframe as DebateStrategy variant |
+| `models.py` | Simplify: keep Finding, ExpertResult, ConsensusResult, Verdict; remove TaskConfig preset fields (experts, adjudicator_role, output_format, display_name); keep expert_models dict |
+| `constants.py` | Remove TaskTypes; keep QualityThresholds, TimeoutConfig, RetryConfig, Models, ComplexityThresholds |
+| `memory.py` | Keep + add `check_cache(content_hash, task_desc, expert_names)` method |
+| `context_loader.py` | Keep — orchestrator.md uses it to prefix expert prompts |
 
 ### Add (new)
 
 | File | Purpose |
 |------|---------|
-| `catalog.py` | Agent discovery from all installed plugins |
-| `consensus.py` | Extracted ConsensusCalculator (pure math) |
+| `catalog.py` | Agent discovery from all installed plugins (see Agent Catalog section) |
+| `consensus.py` | Extracted ConsensusCalculator (pure aggregation, no agent logic) |
+| `complexity.py` | ComplexityAssessor — deterministic content complexity scoring |
+| `selector.py` | ExpertSelector — minimum expert set selection |
+| `path_selector.py` | ModelAssigner + ExecutionPath — path A vs C assignment |
+| `cache.py` | FindingsCache — content-hash keyed findings cache |
 | `agents/orchestrator.md` | The brain — Claude Code orchestrator agent |
 
 ### Remove
 
 | File | Reason |
 |------|--------|
-| `config.py` | All hardcoded task presets removed |
+| `config.py` | All hardcoded task presets removed; orchestrator decides dynamically |
 | `debate/orchestrator.py` ExpertRunner, DebatePhase | Python no longer spawns experts directly |
+| `router.py` SmartRouter | Replaced by ModelAssigner in path_selector.py |
+| `plugin_registry.py` | Replaced by catalog.py |
 | `supervisor.py` | Dead code (confirmed unused) |
-| `router.py` SmartRouter | Orchestrator agent handles routing decisions |
-| `plugin_registry.py` | Replaced by catalog.py (logic reused) |
+
+### Deferred (no change yet)
+
+| Feature | Status |
+|---------|--------|
+| `sparse_topology_k` in models.py | Keep field but do not expand. Defer sparse topology optimization to Phase 2+ after measuring token spend. |
+| Path B (ollama launch) | Verify CLI interface + security before implementing |
 
 ---
 
@@ -830,26 +868,110 @@ Updated to reflect generic interface:
 
 ### Phase 1 — Foundation (non-breaking)
 
-- Extract `ConsensusCalculator` → `ai_delegate/consensus.py`
-- Add `catalog.py` with agent discovery
-- Write `agents/orchestrator.md` skeleton
-- Add `ai-delegate catalog` and `ai-delegate consensus` CLI commands
-- All existing functionality still works
+All existing `ai-delegate audit/analyze/...` commands continue to work. New files added alongside.
+
+**New files:**
+
+- `ai_delegate/catalog.py` — agent discovery (with S1-S4 security)
+- `ai_delegate/consensus.py` — extracted ConsensusCalculator
+- `ai_delegate/complexity.py` — ComplexityAssessor
+- `ai_delegate/selector.py` — ExpertSelector
+- `ai_delegate/path_selector.py` — ModelAssigner + ExecutionPath
+- `ai_delegate/cache.py` — FindingsCache
+
+**New CLI commands:**
+
+- `ai-delegate catalog --json [--domain X] [--trust-all]`
+- `ai-delegate consensus --findings '[...]'`
+- `ai-delegate assess --file X [--files X,Y,Z]`
+- `ai-delegate assign --agents X,Y --complexity medium --json`
+- `ai-delegate memory check --content-hash <hash> --experts X,Y`
+
+**New tests:**
+
+- `tests/test_catalog.py` — agent discovery, S1-S4 security, domain matching, error handling
+- `tests/test_consensus_extracted.py` — ConsensusCalculator extracted to consensus.py
+- `tests/test_complexity.py` — ComplexityAssessor (already partially exists, expand)
+- `tests/test_selector.py` — ExpertSelector (minimum set, no overlap, cap by level)
+- `tests/test_path_selector.py` — ModelAssigner (path A vs C decision rules)
+- `tests/test_cache.py` — FindingsCache (get/set/expire/key collision)
+
+**Trust file for dev:**
+Create `~/.claude/ai-delegate-trust.json`:
+
+```json
+{"trusted_plugins": ["ai-delegate", "devflow", "atlassian-pm"]}
+```
 
 ### Phase 2 — Orchestrator
 
-- Implement full `agents/orchestrator.md` with complexity assessment + expert selection
-- Implement `ollama launch claude` execution path (Launch path B)
-- Connect orchestrator → catalog → consensus pipeline
-- Add memory cache-check integration
+- Write `agents/orchestrator.md` with full workflow (steps 1-7 from Intelligence Layer)
+- Connect orchestrator → catalog → selector → path_selector → consensus pipeline
+- Add `ai-delegate run-expert --path sdk|agent --agent X --model Y` command
+- Add `ai-delegate orchestrate "<task>"` entry point
+- Add integration tests for orchestrator pipeline (mock Agent tool responses)
+
+**Memory cache integration:**
+Add `check_cache()` to `memory.py`:
+
+```python
+def check_cache(
+    self,
+    content_hash: str,
+    task_description: str,
+    expert_names: list[str],
+) -> CacheEntry | None:
+    """Check if analysis was done before with same experts."""
+    key = CacheKey(
+        content_hash=content_hash,
+        task_description=task_description.strip().lower(),
+        expert_names_hash=hashlib.sha256(":".join(sorted(expert_names)).encode()).hexdigest(),
+        model_versions="",
+    )
+    return FindingsCache().get(key)
+```
 
 ### Phase 3 — Cleanup
 
-- Remove `config.py` task presets
-- Remove `supervisor.py`, `plugin_registry.py`, `router.py` SmartRouter
-- Simplify `models.py`, `constants.py`
-- Update skill SKILL.md
-- Update all tests
+- Remove `config.py`, `supervisor.py`, `plugin_registry.py`, `router.py SmartRouter`
+- Simplify `models.py` (remove TaskConfig preset fields, from_task_type presets)
+- Simplify `constants.py` (remove TaskTypes)
+- Update `SKILL.md`
+
+**Test migration plan (~170 tests affected):**
+
+| Test File | Impact | Action |
+|-----------|--------|--------|
+| `test_router.py` (~40 tests) | SmartRouter removed | Rewrite as `test_path_selector.py` (ModelAssigner tests) |
+| `test_expert_runner.py` (~30 tests) | ExpertRunner removed | Rewrite as orchestrator integration tests with mock Agent responses |
+| `test_debate_phase.py` (~30 tests) | DebatePhase removed | Extract DebatePhase tests into orchestrator integration tests |
+| `test_supervisor.py` (~30 tests) | Supervisor removed | Delete — no replacement needed |
+| `test_plugin_registry.py` (~15 tests) | PluginRegistry removed | Rewrite as `test_catalog.py` (already added in Phase 1) |
+| `test_config.py` (~25 tests) | config.py presets removed | Delete TaskConfig preset tests; add CLI integration tests |
+
+**Mock Agent tool responses for orchestrator tests:**
+
+```python
+# tests/conftest.py
+@pytest.fixture
+def mock_agent_response():
+    """Mock response for Claude Code Agent tool calls."""
+    return {
+        "schema_version": "1.0",
+        "expert": "security-expert",
+        "source_plugin": "ai-delegate",
+        "findings": [
+            {
+                "severity": "high",
+                "issue": "SQL injection in user query",
+                "recommendation": "Use parameterized queries",
+                "location": "src/db.py:42"
+            }
+        ]
+    }
+```
+
+**Estimated test count after Phase 3:** ~380 tests (from 512 — loss from removed components partially offset by new tests)
 
 ---
 
