@@ -1,0 +1,98 @@
+<h2>Section 3 — Error Handling & Testing</h2>
+<p class="subtitle">graceful degradation + test strategy</p>
+
+<div class="section">
+  <h3>Error Handling — Graceful Degradation</h3>
+  <div style="font-size: 12px; overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse; color: #94a3b8;">
+      <thead>
+        <tr style="color: #7dd3fc; border-bottom: 1px solid #1e293b;">
+          <th style="padding: 8px; text-align: left; font-weight: 600;">Scenario</th>
+          <th style="padding: 8px; text-align: left; font-weight: 600;">Behaviour</th>
+          <th style="padding: 8px; text-align: left; font-weight: 600;">Fallback</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid #0f172a;">
+          <td style="padding: 8px; color: #fbbf24;">Agent Teams unavailable<br/><span style="font-size: 10px; color: #64748b;">(feature flag off หรือ version เก่า)</span></td>
+          <td style="padding: 8px;">detect ก่อน spawn ด้วย <code style="background:#1e293b;padding:2px 4px;border-radius:3px">TeamCreate</code> try/except</td>
+          <td style="padding: 8px; color: #86efac;">skip Path D → ส่ง disputed findings ตรง Adjudicator (current behavior)</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #0f172a;">
+          <td style="padding: 8px; color: #fbbf24;">Expert teammate crash<br/><span style="font-size: 10px; color: #64748b;">(timeout / error mid-debate)</span></td>
+          <td style="padding: 8px;">Lead detect teammate ไม่ respond ใน timeout</td>
+          <td style="padding: 8px; color: #86efac;">treat finding เป็น unresolved → Adjudicator ตัดสิน</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #0f172a;">
+          <td style="padding: 8px; color: #fbbf24;">0 disputed findings<br/><span style="font-size: 10px; color: #64748b;">(consensus สูงมาก)</span></td>
+          <td style="padding: 8px;">DisputedFindingsBundle.disputed_findings == []</td>
+          <td style="padding: 8px; color: #86efac;">skip Path D entirely → output consensus findings directly</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #0f172a;">
+          <td style="padding: 8px; color: #fbbf24;">DebateResult parse failure<br/><span style="font-size: 10px; color: #64748b;">(malformed JSON from lead)</span></td>
+          <td style="padding: 8px;">warning logged, DebateResult.unresolved = all disputed</td>
+          <td style="padding: 8px; color: #86efac;">Adjudicator รับทั้งหมด (safe over-escalation)</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px; color: #fbbf24;">Lead session crash<br/><span style="font-size: 10px; color: #64748b;">(no session resumption in Agent Teams)</span></td>
+          <td style="padding: 8px;">outer timeout (300s) catches หลัง Agent tool timeout</td>
+          <td style="padding: 8px; color: #86efac;">skip Path D → Adjudicator รับ disputed findings ตรง</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="margin-top: 8px; padding: 8px; background: #1e2228; border-left: 3px solid #7c3aed; border-radius: 4px; font-size: 11px; color: #94a3b8;">
+    <strong>Design principle:</strong> Path D failure ต้องไม่ทำให้ overall analysis crash — ทุก error path fallback ไป Adjudicator ซึ่งทำงานได้อยู่แล้ว
+  </div>
+</div>
+
+<div class="section">
+  <h3>Testing Strategy</h3>
+
+  <div style="display: flex; gap: 12px; font-size: 11px;">
+
+    <div style="flex: 1; background: #0f172a; border-radius: 6px; padding: 10px;">
+      <div style="color: #7dd3fc; font-weight: bold; margin-bottom: 8px;">test_debate_runner.py</div>
+      <div style="color: #64748b; line-height: 1.8;">
+        <div style="color: #86efac;">test_empty_disputed_skips_debate()</div>
+        <div style="padding-left: 12px; color: #64748b;">→ bundle.disputed == [] → DebateResult.unresolved == []</div>
+        <div style="color: #86efac;">test_bundle_serialization()</div>
+        <div style="padding-left: 12px; color: #64748b;">→ DisputedFindingsBundle → JSON → back → identical</div>
+        <div style="color: #86efac;">test_parse_failure_escalates_all()</div>
+        <div style="padding-left: 12px; color: #64748b;">→ malformed DebateResult → all disputed → unresolved</div>
+        <div style="color: #86efac;">test_result_merge_resolved_unresolved()</div>
+        <div style="padding-left: 12px; color: #64748b;">→ resolved + unresolved merged correctly in final verdict</div>
+      </div>
+    </div>
+
+    <div style="flex: 1; background: #0f172a; border-radius: 6px; padding: 10px;">
+      <div style="color: #7dd3fc; font-weight: bold; margin-bottom: 8px;">test_debate_lead_agent.md</div>
+      <div style="color: #64748b; line-height: 1.6; font-size: 11px;">
+        Agent tests (Claude Code level) — invoke debate-lead.md directly:<br/><br/>
+        <div style="color: #86efac;">scenario_1_all_agree.md</div>
+        <div style="padding-left: 12px; color: #64748b;">→ 3 experts AGREE → 0 unresolved</div>
+        <div style="color: #86efac;">scenario_2_one_challenged.md</div>
+        <div style="padding-left: 12px; color: #64748b;">→ 1 CHALLENGE, 2 AGREE → resolved (80%)</div>
+        <div style="color: #86efac;">scenario_3_split_verdict.md</div>
+        <div style="padding-left: 12px; color: #64748b;">→ split → unresolved → goes to Adjudicator</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>Integration with Existing Flow</h3>
+  <div style="font-size: 11px; background: #0f172a; border-radius: 6px; padding: 12px; font-family: monospace; color: #94a3b8; line-height: 1.8;">
+    <div><span style="color: #64748b;"># SKILL.md orchestration (pseudo)</span></div>
+    <div><span style="color: #fbbf24;">if</span> task.always_deep <span style="color: #fbbf24;">and</span> consensus.score &lt; 0.90:</div>
+    <div>&nbsp;&nbsp;bundle = DisputedFindingsBundle(consensus.disputed_findings, ...)</div>
+    <div>&nbsp;&nbsp;<span style="color: #7dd3fc;">try:</span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;debate = DebateTeamRunner.run(bundle)  <span style="color: #64748b;"># Agent Teams</span></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;verdict = Adjudicator.synthesize(debate.unresolved)</div>
+    <div>&nbsp;&nbsp;<span style="color: #7dd3fc;">except</span> DebateUnavailable:</div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;verdict = Adjudicator.synthesize(bundle.disputed_findings)  <span style="color: #64748b;"># fallback</span></div>
+    <div><span style="color: #fbbf24;">else:</span></div>
+    <div>&nbsp;&nbsp;verdict = Adjudicator.synthesize(consensus.disputed_findings)</div>
+  </div>
+</div>

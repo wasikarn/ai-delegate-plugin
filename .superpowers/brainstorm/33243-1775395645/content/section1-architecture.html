@@ -1,0 +1,94 @@
+<h2>Section 1 — Architecture Overview</h2>
+<p class="subtitle">Path D ทำงานที่ Claude Code skill layer ไม่ใช่ Python layer</p>
+
+<div class="section">
+  <h3>Key Insight: สองชั้นที่แตกต่างกัน</h3>
+  <p style="font-size: 13px; color: #94a3b8; margin-bottom: 12px;">
+    Path B/C ทำงานใน Python (subprocess, SDK) แต่ Agent Teams เป็น Claude Code native feature — ต้องรันที่ skill layer
+  </p>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+
+    <!-- Layer 1: Skill Layer -->
+    <div style="border: 2px solid #7c3aed; border-radius: 8px; padding: 12px; background: #1e1040;">
+      <div style="color: #c4b5fd; font-weight: bold; margin-bottom: 8px;">☁️ Claude Code Skill Layer</div>
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <div style="flex: 1; background: #2d1f50; border-radius: 4px; padding: 8px; text-align: center; color: #ddd6fe; font-size: 11px;">
+          📋 SKILL.md<br/><span style="color: #94a3b8; font-size: 10px;">orchestrates full flow</span>
+        </div>
+        <div style="flex: 1; background: #2d1f50; border-radius: 4px; padding: 8px; text-align: center; color: #ddd6fe; font-size: 11px;">
+          🤝 DebateTeamRunner<br/><span style="color: #94a3b8; font-size: 10px;">Agent Teams debate lead</span>
+        </div>
+        <div style="flex: 1; background: #2d1f50; border-radius: 4px; padding: 8px; text-align: center; color: #ddd6fe; font-size: 11px;">
+          ⚖️ Adjudicator<br/><span style="color: #94a3b8; font-size: 10px;">Sonnet final verdict</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; color: #64748b; font-size: 11px;">▲ ส่ง DisputedFindingsBundle ▲ รับ DebateResult</div>
+
+    <!-- Layer 2: Python Layer -->
+    <div style="border: 2px solid #16a34a; border-radius: 8px; padding: 12px; background: #0f1f0f;">
+      <div style="color: #86efac; font-weight: bold; margin-bottom: 8px;">🐍 Python Package (ai_delegate)</div>
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1; background: #1a2e1a; border-radius: 4px; padding: 8px; text-align: center; color: #86efac; font-size: 11px;">
+          Path B AgentPool<br/><span style="color: #64748b; font-size: 10px;">parallel analysis</span>
+        </div>
+        <div style="flex: 1; background: #1a2e1a; border-radius: 4px; padding: 8px; text-align: center; color: #86efac; font-size: 11px;">
+          ConsensusCalculator<br/><span style="color: #64748b; font-size: 10px;">score + disputed</span>
+        </div>
+        <div style="flex: 1; background: #1a2e1a; border-radius: 4px; padding: 8px; text-align: center; color: #86efac; font-size: 11px;">
+          DisputedFindingsBundle<br/><span style="color: #64748b; font-size: 10px;">serialized handoff</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>Complete Flow (always_deep tasks)</h3>
+  <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="background: #1e3a5f; border-radius: 4px; padding: 6px 10px; color: #7dd3fc; white-space: nowrap;">1. Input</div>
+      <div style="color: #64748b; font-size: 11px;">user: ai-delegate audit --file src/auth.py</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="background: #1a2e1a; border-radius: 4px; padding: 6px 10px; color: #86efac; white-space: nowrap;">2. Path B</div>
+      <div style="color: #64748b; font-size: 11px;">Python: N experts รัน parallel → findings → ConsensusCalculator → disputed findings</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="background: #1e1040; border: 1px solid #7c3aed; border-radius: 4px; padding: 6px 10px; color: #c4b5fd; white-space: nowrap;">3. Path D 🆕</div>
+      <div style="color: #64748b; font-size: 11px;">Claude Code: DebateTeamRunner สร้าง Agent Team → experts debate disputed findings → DebateResult</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="background: #2d1b1b; border-radius: 4px; padding: 6px 10px; color: #fca5a5; white-space: nowrap;">4. Adjudicate</div>
+      <div style="color: #64748b; font-size: 11px;">Adjudicator (Sonnet) รับ DebateResult → final verdict เฉพาะ unresolved</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="background: #1e3a5f; border-radius: 4px; padding: 6px 10px; color: #7dd3fc; white-space: nowrap;">5. Output</div>
+      <div style="color: #64748b; font-size: 11px;">verdict แสดงผล</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>New Files</h3>
+  <div style="font-size: 12px; font-family: monospace; background: #0f172a; border-radius: 6px; padding: 12px; color: #94a3b8; line-height: 1.8;">
+    <span style="color: #7dd3fc;">ai_delegate/agents/</span><br/>
+    &nbsp;&nbsp;<span style="color: #86efac;">debate-lead.md</span>&nbsp;&nbsp;&nbsp;<span style="color: #4b5563;"># Agent Teams lead — debate orchestrator</span><br/>
+    &nbsp;&nbsp;<span style="color: #86efac;">debate-expert.md</span>&nbsp;<span style="color: #4b5563;"># Teammate template — receives disputed findings</span><br/>
+    <br/>
+    <span style="color: #7dd3fc;">ai_delegate/</span><br/>
+    &nbsp;&nbsp;<span style="color: #86efac;">debate_runner.py</span>&nbsp;<span style="color: #4b5563;"># DisputedFindingsBundle + DebateResult dataclasses</span><br/>
+    <br/>
+    <span style="color: #7dd3fc;">tests/</span><br/>
+    &nbsp;&nbsp;<span style="color: #86efac;">test_debate_runner.py</span>
+  </div>
+</div>

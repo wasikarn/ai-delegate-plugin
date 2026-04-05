@@ -1,0 +1,113 @@
+<h2>Section 2 — Components & Data Flow</h2>
+<p class="subtitle">handoff ระหว่าง Python → Claude Code layer และ debate protocol</p>
+
+<div class="section">
+  <h3>Data Models (Python)</h3>
+  <div style="display: flex; gap: 12px;">
+
+    <div style="flex: 1; background: #0f172a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; line-height: 1.7; color: #94a3b8;">
+      <div style="color: #7dd3fc; margin-bottom: 4px;">DisputedFindingsBundle</div>
+      <div style="color: #86efac;">disputed_findings:</div>
+      <div>&nbsp;&nbsp;list[Finding]</div>
+      <div style="color: #86efac;">expert_results:</div>
+      <div>&nbsp;&nbsp;list[ExpertResult]</div>
+      <div style="color: #86efac;">task_type: str</div>
+      <div style="color: #86efac;">file_context: str</div>
+      <br/>
+      <div style="color: #64748b; font-size: 10px;"># Python → JSON → SKILL.md</div>
+    </div>
+
+    <div style="display: flex; align-items: center; color: #7c3aed; font-size: 18px;">→</div>
+
+    <div style="flex: 1; background: #0f172a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; line-height: 1.7; color: #94a3b8;">
+      <div style="color: #7dd3fc; margin-bottom: 4px;">DebateResult</div>
+      <div style="color: #86efac;">resolved_findings:</div>
+      <div>&nbsp;&nbsp;list[Finding]</div>
+      <div style="color: #86efac;">unresolved_findings:</div>
+      <div>&nbsp;&nbsp;list[Finding]</div>
+      <div style="color: #86efac;">debate_summary: str</div>
+      <br/>
+      <div style="color: #64748b; font-size: 10px;"># DebateTeamRunner → Adjudicator</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>Debate Protocol — 1 Round Flow</h3>
+
+  <div style="display: flex; flex-direction: column; gap: 0; font-size: 11px; position: relative;">
+
+    <!-- Lead -->
+    <div style="display: flex; gap: 12px; margin-bottom: 6px;">
+      <div style="width: 120px; background: #2d1f50; border: 1px solid #7c3aed; border-radius: 6px; padding: 8px; text-align: center; color: #c4b5fd; flex-shrink: 0;">
+        🎯 Debate Lead<br/>(Sonnet)
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; justify-content: center;">
+        <div style="background: #1e1040; border-radius: 4px; padding: 6px; color: #94a3b8;">
+          1. รับ DisputedFindingsBundle → สร้าง Agent Team (N experts)<br/>
+          2. Post แต่ละ disputed finding เป็น shared task → "ต้องการ verdict จาก expert ทุกคน"
+        </div>
+      </div>
+    </div>
+
+    <!-- Experts debate -->
+    <div style="display: flex; gap: 12px; margin-bottom: 6px;">
+      <div style="width: 120px; background: #1a2e1a; border: 1px solid #16a34a; border-radius: 6px; padding: 8px; text-align: center; color: #86efac; flex-shrink: 0;">
+        👥 Expert Team<br/>(kimi × N)
+      </div>
+      <div style="flex: 1; background: #1e1040; border-radius: 4px; padding: 8px; color: #94a3b8;">
+        3. แต่ละ expert อ่าน disputed findings + original analysis ของ peers<br/>
+        4. ส่ง mailbox message: <span style="color: #86efac;">AGREE</span> / <span style="color: #fbbf24;">CHALLENGE: [reason]</span> / <span style="color: #f87171;">WITHDRAW</span><br/>
+        5. Experts เห็น peer messages → respond ครั้งเดียว (1 round)
+      </div>
+    </div>
+
+    <!-- Lead collects -->
+    <div style="display: flex; gap: 12px;">
+      <div style="width: 120px; background: #2d1f50; border: 1px solid #7c3aed; border-radius: 6px; padding: 8px; text-align: center; color: #c4b5fd; flex-shrink: 0;">
+        🎯 Debate Lead<br/>(collects)
+      </div>
+      <div style="flex: 1; background: #1e1040; border-radius: 4px; padding: 8px; color: #94a3b8;">
+        6. รวบรวม responses → classify:<br/>
+        &nbsp;&nbsp;• <span style="color: #86efac;">≥80% AGREE</span> → resolved_findings (ไม่ต้อง Adjudicator)<br/>
+        &nbsp;&nbsp;• <span style="color: #f87171;">ยังแตกต่าง</span> → unresolved_findings (ส่ง Adjudicator)<br/>
+        7. Return DebateResult JSON
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>Agent Definitions</h3>
+  <div style="display: flex; gap: 12px; font-size: 11px;">
+
+    <div style="flex: 1; background: #0f172a; border-radius: 6px; padding: 10px;">
+      <div style="color: #c4b5fd; font-weight: bold; margin-bottom: 6px;">📋 debate-lead.md</div>
+      <div style="color: #64748b; line-height: 1.6;">
+        <div style="color: #94a3b8;">Role: Team Lead (Sonnet)</div>
+        <div>Tools: Agent, TaskCreate, TaskUpdate, SendMessage</div>
+        <div>Input: DisputedFindingsBundle JSON</div>
+        <div>Output: DebateResult JSON</div>
+        <div style="margin-top: 6px; color: #64748b;">สร้าง team → post tasks → collect responses → classify resolved/unresolved</div>
+      </div>
+    </div>
+
+    <div style="flex: 1; background: #0f172a; border-radius: 6px; padding: 10px;">
+      <div style="color: #86efac; font-weight: bold; margin-bottom: 6px;">📋 debate-expert.md</div>
+      <div style="color: #64748b; line-height: 1.6;">
+        <div style="color: #94a3b8;">Role: Teammate (kimi-k2.5:cloud)</div>
+        <div>Tools: TaskList, TaskGet, SendMessage</div>
+        <div>Input: original analysis + peer findings</div>
+        <div>Output: AGREE/CHALLENGE/WITHDRAW per finding</div>
+        <div style="margin-top: 6px; color: #64748b;">อ่าน shared tasks → ส่ง position ผ่าน mailbox → ไม่ต้อง re-analyze code</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="padding: 10px; background: #1e2d1e; border-left: 3px solid #16a34a; border-radius: 4px; font-size: 11px; color: #86efac;">
+  <strong>Token cost estimate:</strong> debate-expert ไม่ต้อง re-read codebase (ใช้ original findings เป็น context) → cost ต่ำกว่า full re-analysis มาก · N=3 experts × 1 round ≈ ~$0.05-0.10 additional per debate
+</div>

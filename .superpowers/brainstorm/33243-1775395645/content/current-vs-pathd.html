@@ -1,0 +1,118 @@
+<h2>Current Flow vs Path D Concept</h2>
+<p class="subtitle">เปรียบเทียบ debate architecture — ปัจจุบัน vs ที่จะเพิ่ม</p>
+
+<div class="split" style="gap: 24px; align-items: flex-start;">
+
+  <!-- Current Flow -->
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">🔵 ปัจจุบัน — Parallel Analysis</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+
+        <div style="text-align: center; background: #1e3a5f; border-radius: 8px; padding: 10px; color: #7dd3fc;">
+          📥 Code / File Input
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 11px;">▼ ส่งให้ทุก expert พร้อมกัน</div>
+
+        <div style="display: flex; gap: 8px;">
+          <div style="flex: 1; background: #1a2e1a; border: 1px solid #16a34a; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #86efac;">
+            🔐 OWASP<br/>Expert
+          </div>
+          <div style="flex: 1; background: #1a2e1a; border: 1px solid #16a34a; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #86efac;">
+            🔑 Auth<br/>Expert
+          </div>
+          <div style="flex: 1; background: #1a2e1a; border: 1px solid #16a34a; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #86efac;">
+            🛡️ Input<br/>Expert
+          </div>
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 11px;">▼ ไม่เห็นผลกัน</div>
+
+        <div style="background: #2a1f3d; border: 1px solid #7c3aed; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #c4b5fd;">
+          📊 ConsensusCalculator<br/>
+          <span style="font-size: 10px; color: #94a3b8;">รวมผลทั้งหมด → score</span>
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 11px;">▼ ถ้า score &lt; 90%</div>
+
+        <div style="background: #2d1b1b; border: 1px solid #dc2626; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #fca5a5;">
+          ⚖️ Adjudicator (Sonnet)<br/>
+          <span style="font-size: 10px; color: #94a3b8;">synthesize ทั้งหมด</span>
+        </div>
+
+        <div style="background: #1e3a5f; border-radius: 6px; padding: 8px; text-align: center; color: #7dd3fc; font-size: 11px;">
+          📋 Final Verdict
+        </div>
+
+      </div>
+      <div style="margin-top: 12px; padding: 8px; background: #0f172a; border-radius: 6px; font-size: 10px; color: #64748b;">
+        ❌ Experts ไม่เห็นงานกัน<br/>
+        ❌ Disputed findings ถูก Adjudicator ตัดสินโดยลำพัง<br/>
+        ✅ เร็ว ราคาถูก
+      </div>
+    </div>
+  </div>
+
+  <!-- Path D -->
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">🟣 Path D — Agent Teams Peer Debate</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+
+        <div style="text-align: center; background: #1e3a5f; border-radius: 8px; padding: 10px; color: #7dd3fc;">
+          📥 Code / File Input
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 11px;">▼ Path B: parallel analysis (cheap)</div>
+
+        <div style="display: flex; gap: 8px;">
+          <div style="flex: 1; background: #1a2e1a; border: 1px solid #16a34a; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #86efac;">
+            🔐 OWASP<br/>Expert
+          </div>
+          <div style="flex: 1; background: #1a2e1a; border: 1px solid #16a34a; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #86efac;">
+            🔑 Auth<br/>Expert
+          </div>
+          <div style="flex: 1; background: #1a2e1a; border: 1px solid #16a34a; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #86efac;">
+            🛡️ Input<br/>Expert
+          </div>
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 11px;">▼ เอาเฉพาะ disputed findings</div>
+
+        <div style="background: #2d1f3d; border: 2px solid #a855f7; border-radius: 8px; padding: 10px;">
+          <div style="font-size: 11px; text-align: center; color: #d8b4fe; margin-bottom: 8px; font-weight: bold;">
+            🤝 Agent Teams Debate Round
+          </div>
+          <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <div style="flex: 1; background: #1e1040; border: 1px solid #7c3aed; border-radius: 4px; padding: 6px; font-size: 10px; text-align: center; color: #c4b5fd;">
+              OWASP ↔ Auth<br/>peer message
+            </div>
+            <div style="flex: 1; background: #1e1040; border: 1px solid #7c3aed; border-radius: 4px; padding: 6px; font-size: 10px; text-align: center; color: #c4b5fd;">
+              Auth ↔ Input<br/>peer message
+            </div>
+          </div>
+          <div style="font-size: 10px; text-align: center; color: #94a3b8;">📬 mailbox + shared task list</div>
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 11px;">▼ เฉพาะ unresolved after debate</div>
+
+        <div style="background: #2d1b1b; border: 1px solid #dc2626; border-radius: 6px; padding: 8px; font-size: 11px; text-align: center; color: #fca5a5;">
+          ⚖️ Adjudicator (Sonnet)<br/>
+          <span style="font-size: 10px; color: #94a3b8;">ตัดสินเฉพาะที่ยังเห็นไม่ตรงกัน</span>
+        </div>
+
+        <div style="background: #1e3a5f; border-radius: 6px; padding: 8px; text-align: center; color: #7dd3fc; font-size: 11px;">
+          📋 Final Verdict
+        </div>
+
+      </div>
+      <div style="margin-top: 12px; padding: 8px; background: #0f172a; border-radius: 6px; font-size: 10px; color: #64748b;">
+        ✅ Experts เห็นและ challenge กันได้โดยตรง<br/>
+        ✅ Adjudicator ทำงานน้อยลง (เฉพาะ unresolved)<br/>
+        ⚠️ Token cost สูงขึ้น (Agent Teams ~4-5x)
+      </div>
+    </div>
+  </div>
+
+</div>

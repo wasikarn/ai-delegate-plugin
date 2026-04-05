@@ -39,13 +39,6 @@ from .router import (
     get_router,
     select_cli_and_model,
 )
-from .supervisor import (
-    Supervisor,
-    WorkerType,
-    WorkerConfig,
-    TaskResult,
-    create_supervisor,
-)
 from .constants import (
     Models,
     TokenLimits,
@@ -102,12 +95,6 @@ __all__ = [
     "get_model_for_complexity",
     "get_router",
     "select_cli_and_model",
-    # Supervisor
-    "Supervisor",
-    "WorkerType",
-    "WorkerConfig",
-    "TaskResult",
-    "create_supervisor",
     # Constants
     "Models",
     "TokenLimits",

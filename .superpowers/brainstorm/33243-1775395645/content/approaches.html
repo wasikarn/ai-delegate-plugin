@@ -1,0 +1,59 @@
+<h2>Path D — 3 Approaches</h2>
+<p class="subtitle">เลือก architecture สำหรับ peer debate round</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Shared Context Injection</h3>
+      <p style="font-size: 12px; color: #94a3b8; margin: 4px 0 8px;">ส่งผลของ expert อื่นเป็น context ก่อน debate call</p>
+      <div style="font-size: 12px; line-height: 1.6;">
+        หลัง Path B analysis → รวบรวม disputed findings → เรียก expert แต่ละคนอีกครั้ง พร้อม inject findings ของ peers เป็น system context → expert ตอบสนองด้วย structured JSON<br/><br/>
+        <strong>Mechanism:</strong> BackendClient call ปกติ (Path A SDK) ไม่ใช้ Agent Teams จริงๆ แค่เลียนแบบ "เห็นงานกัน"
+      </div>
+      <div class="pros-cons" style="margin-top: 8px; font-size: 11px;">
+        <div class="pros"><h4>Pros</h4><ul><li>ง่าย implement มาก</li><li>Cost ต่ำ (kimi x N calls)</li><li>No experimental API</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>ไม่ใช่ "real" peer debate</li><li>Experts ไม่ back-and-forth กัน</li><li>Context injection ≠ true messaging</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Agent Teams (True P2P) ⭐ Recommended</h3>
+      <p style="font-size: 12px; color: #94a3b8; margin: 4px 0 8px;">ใช้ Claude Code Agent Teams จริงๆ — experts ส่ง message ถึงกันโดยตรง</p>
+      <div style="font-size: 12px; line-height: 1.6;">
+        Lead agent สร้าง team ของ expert teammates → แชร์ disputed findings ผ่าน shared task list → experts ส่ง message โดยตรงผ่าน mailbox → 1 debate round → lead collect responses → Adjudicator synthesize unresolved
+      </div>
+      <div style="font-size: 11px; margin: 6px 0; padding: 6px; background: #1e1040; border-radius: 4px; color: #c4b5fd;">
+        <strong>Models:</strong> Experts = kimi-k2.5:cloud · Lead = Sonnet (already enabled in settings)
+      </div>
+      <div class="pros-cons" style="margin-top: 8px; font-size: 11px;">
+        <div class="pros"><h4>Pros</h4><ul><li>True peer visibility</li><li>Experts challenge กันจริง</li><li>Article validates approach</li><li>User already has feature enabled</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Experimental API (no session resumption)</li><li>Higher token cost (~4-5x debate round)</li><li>More complex orchestration</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Async Message Bus (File-Based)</h3>
+      <p style="font-size: 12px; color: #94a3b8; margin: 4px 0 8px;">experts เขียน/อ่าน findings จาก shared file แทน Agent Teams mailbox</p>
+      <div style="font-size: 12px; line-height: 1.6;">
+        ใช้ temp directory เป็น "message bus" — expert A เขียน findings → expert B อ่าน + respond → collect ทั้งหมด → Adjudicator ตัดสิน ไม่ต้องพึ่ง experimental Agent Teams API
+      </div>
+      <div class="pros-cons" style="margin-top: 8px; font-size: 11px;">
+        <div class="pros"><h4>Pros</h4><ul><li>ไม่พึ่ง experimental feature</li><li>Stable, testable</li><li>Works with any CLI path (A/B/C)</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Sequential (B ต้องรอ A เสร็จก่อน)</li><li>File I/O overhead</li><li>ไม่ใช่ true P2P</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top: 16px; padding: 10px; background: #1e2d1e; border-left: 3px solid #16a34a; border-radius: 4px; font-size: 12px; color: #86efac;">
+  <strong>Recommendation: B</strong> — ใช้ Agent Teams จริง เพราะ user มี experimental feature เปิดอยู่แล้ว และ article validate approach นี้โดยตรง Approach A เลียนแบบ debate แต่ไม่ใช่ของจริง Approach C ยังดีแต่ sequential ไม่ใช่ P2P
+</div>
