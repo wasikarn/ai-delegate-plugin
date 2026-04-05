@@ -22,6 +22,8 @@ from .consensus import ConsensusCalculator, normalize_finding
 from .complexity import ComplexityAssessor, ComplexityScore
 from .catalog import AgentCatalog, AgentMetadata, DOMAIN_KEYWORDS
 from .debate_runner import DisputedFindingsBundle, DebateResult
+from .model_assigner import ExecutionPath, ExpertAssignment, ModelAssigner
+from .agent_executor import AgentExecutorConfig, AgentExecutor, AgentPool
 from .debate.orchestrator import (
     DebateOrchestrator,
     ExpertRunner,
@@ -79,6 +81,14 @@ __all__ = [
     # Debate Runner (Path D)
     "DisputedFindingsBundle",
     "DebateResult",
+    # Agent Executor (Path B)
+    "AgentExecutorConfig",
+    "AgentExecutor",
+    "AgentPool",
+    # Model Assigner
+    "ExecutionPath",
+    "ExpertAssignment",
+    "ModelAssigner",
     # Orchestrator components
     "DebateOrchestrator",
     "ExpertRunner",

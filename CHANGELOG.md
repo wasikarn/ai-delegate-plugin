@@ -29,6 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AgentCatalog.for_domains(domains)` — filter agents by detected domain keywords
   - `DOMAIN_KEYWORDS` — 7 domains: security, performance, architecture, code-quality, testing, migration, database
 
+#### Phase 1B Foundation — Path B Agent Executor
+
+- **agent_executor.py** — Path B subprocess execution via `ollama launch claude`
+  - `AgentExecutorConfig` — repo_path, allowed_tools, budget_usd=0.20, timeout_sec=120, effort="low"
+  - `AgentExecutor.run(assignment, task)` — subprocess call, JSON result parsing, ExpertResult
+  - `AgentExecutor._build_cmd()` — always list args (never shell=True); --bare, --dangerously-skip-permissions
+  - `AgentPool.run_parallel(assignments, task)` — ThreadPoolExecutor, failed agents skipped (logged)
+- **model_assigner.py** — Routes each agent to Path A/B/C
+  - `ExecutionPath` enum: SDK (Path A) / CLI (Path B) / AGENT (Path C)
+  - `ExpertAssignment` dataclass: agent + path + resolved model
+  - `ModelAssigner.assign()` — no file tools → SDK; deep/high-complexity + file tools → AGENT; else → CLI
+  - `ModelAssigner.assign_all()` — batch routing, preserves order
+  - `FILE_ACCESS_TOOLS` = {Read, Glob, Grep, Bash}; `DEEP_DOMAINS` = {architecture, migration}
+- **constants.py** — Added `AgentExecutorDefaults` class (ALLOWED_TOOLS, BUDGET_USD, TIMEOUT_SEC, EFFORT)
+- **40 new tests** across test_agent_executor.py, test_agent_pool.py, test_model_assigner.py (628 total)
+
 #### Phase 1C Foundation — Path D Agent Teams Peer Debate
 
 - **debate_runner.py** — Data models for Path D Agent Teams peer debate handoff

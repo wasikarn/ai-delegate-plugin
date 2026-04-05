@@ -142,6 +142,19 @@ class CLIPriority:
 
 
 # =============================================================================
+# Agent Executor Defaults
+# =============================================================================
+
+class AgentExecutorDefaults:
+    """Defaults for Path B (ollama launch claude) agent execution."""
+
+    ALLOWED_TOOLS: List[str] = ["Read", "Grep", "Glob"]
+    BUDGET_USD: float = 0.20
+    TIMEOUT_SEC: int = 120
+    EFFORT: str = "low"
+
+
+# =============================================================================
 # Task Types
 # =============================================================================
 
