@@ -49,7 +49,8 @@ User: /ai-delegate "review this PR diff"
          │
          ├─ 3. Execute experts in parallel
          │      ┌─ Path A: Anthropic SDK → Ollama   ← fast, no tools, pattern analysis
-         │      └─ Path C: Claude Code Agent tool   ← deep reasoning + file access
+         │      ├─ Path B: ollama launch claude      ← file tools, budget model (kimi)
+         │      └─ Path C: Claude Code Agent tool   ← deep reasoning + Sonnet
          │
          ├─ 4. ai-delegate consensus --findings <json>
          │      returns: {score, tier, consensus_findings, disputed_findings}
@@ -314,14 +315,15 @@ class ExpertSelector:
         return selected[:max_count]
 ```
 
-#### `ai_delegate/path_selector.py` — ModelAssigner
+#### `ai_delegate/model_assigner.py` — ModelAssigner
 
-Assigns execution path (A or C) and model per expert. Replaces `SmartRouter` routing logic.
+Assigns execution path (A, B, or C) and model per expert. Replaces `SmartRouter` routing logic.
 
 ```python
 class ExecutionPath(str, Enum):
-    SDK    = "sdk"    # Path A: fast, no file access
-    AGENT  = "agent"  # Path C: deep reasoning + tools
+    SDK   = "sdk"    # Path A — Anthropic SDK → localhost:11434, no tools
+    CLI   = "cli"    # Path B — ollama launch claude subprocess, file tools
+    AGENT = "agent"  # Path C — Claude Code Agent tool (Sonnet), all tools
 
 @dataclass
 class ExpertAssignment:
@@ -329,8 +331,8 @@ class ExpertAssignment:
     path: ExecutionPath
     model: str
 
-FILE_ACCESS_TOOLS = {"Read", "Glob", "Grep", "Bash"}
-DEEP_DOMAINS = {"architecture", "migration"}
+FILE_ACCESS_TOOLS = frozenset({"Read", "Glob", "Grep", "Bash"})
+DEEP_DOMAINS = frozenset({"architecture", "migration"})
 
 class ModelAssigner:
     @staticmethod
@@ -341,27 +343,28 @@ class ModelAssigner:
     ) -> ExpertAssignment:
         """Assign execution path + model for one expert.
 
-        Decision rules (in order):
-        1. If agent.tools intersects FILE_ACCESS_TOOLS → Path C (needs file system)
-        2. If agent.domains intersects DEEP_DOMAINS → Path C (deep reasoning)
-        3. If complexity.level == "high" → Path C (escalate for complex content)
-        4. Otherwise → Path A (SDK, fast pattern analysis)
+        Routing rules:
+        - No file-access tools → Path A (SDK, fast)
+        - File tools + (deep domain OR high complexity) → Path C (Agent/Sonnet)
+        - File tools + standard domain + low/medium complexity → Path B (CLI/kimi)
         """
         overrides = model_overrides or {}
-
         needs_file_access = bool(set(agent.tools) & FILE_ACCESS_TOOLS)
-        needs_deep_reasoning = bool(set(agent.domains) & DEEP_DOMAINS)
+        needs_deep = bool(set(agent.domains) & DEEP_DOMAINS)
         is_complex = complexity.level == "high"
 
-        if needs_file_access or needs_deep_reasoning or is_complex:
-            path = ExecutionPath.AGENT
-            default_model = agent.model or Models.SONNET
-        else:
+        if not needs_file_access:
             path = ExecutionPath.SDK
             default_model = agent.model or Models.KIMI_K25_CLOUD
+        elif needs_deep or is_complex:
+            path = ExecutionPath.AGENT
+            default_model = agent.model or Models.CLAUDE_SONNET
+        else:
+            path = ExecutionPath.CLI
+            default_model = agent.model or Models.KIMI_K25_CLOUD
 
-        model = overrides.get(agent.name, default_model)
-        return ExpertAssignment(agent=agent, path=path, model=model)
+        return ExpertAssignment(agent=agent, path=path,
+                                model=overrides.get(agent.name, default_model))
 
     @staticmethod
     def assign_all(
@@ -422,6 +425,7 @@ The orchestrator agent coordinates Python services. It does **not** implement de
 **Step 5:** Execute experts via `run_progressive`:
 
 - Path A assignments → `ai-delegate run-expert --path sdk --agent X --model Y`
+- Path B assignments → `AgentPool.run_parallel(assignments, task)` (subprocess via `ollama launch claude`)
 - Path C assignments → `Agent(subagent_type="<plugin>:<name>", prompt="...")`
 
 **Step 6:** Call `ai-delegate consensus --findings <json>` → get tier
@@ -431,7 +435,7 @@ The orchestrator agent coordinates Python services. It does **not** implement de
 
 ## Expert Execution Paths
 
-Two active paths. Path B (`ollama launch claude`) is NOT YET IMPLEMENTED — requires verification that the CLI supports `--agent` and `--output-format json` flags before adding.
+Three active paths. `ModelAssigner` routes each expert based on tool requirements and content complexity.
 
 ### Path A: Anthropic SDK (fast, no tools) — ACTIVE
 
@@ -449,18 +453,34 @@ response = client.messages.create(
 
 CLI: `ai-delegate run-expert --agent security-expert --path sdk --model kimi-k2.5:cloud`
 
-**Decision rule:** Does the expert need to READ files itself? → Use Path C instead.
+**Decision rule:** Expert needs no file access → Path A.
 
-### Path B: ollama launch claude (real tools, budget model) — NOT YET IMPLEMENTED
+### Path B: ollama launch claude subprocess (file tools, budget model) — ACTIVE
 
-> **BLOCKED:** `ollama launch claude --agent X --output-format json` flags are unverified.
-> Verify these flags exist before implementing. Do not add this path until confirmed.
+Use for: experts that need real file access but don't require Claude-level reasoning.
 
-Intended use: code exploration when expert needs real file access but cheaper than Claude Sonnet.
+```python
+# agent_executor.py AgentExecutor
+cmd = ["ollama", "launch", "claude",
+       "--model", assignment.model, "--yes", "--",
+       "-p", task,
+       "--add-dir", str(repo_path),
+       "--output-format", "json",
+       "--allowedTools", "Read,Grep,Glob",
+       "--bare", "--dangerously-skip-permissions",
+       "--system-prompt", system_prompt,
+       "--max-budget-usd", "0.20",
+       "--effort", "low"]
+proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+```
+
+Parallel execution via `AgentPool` (ThreadPoolExecutor). Failed agents are silently skipped.
+
+**Decision rule:** Needs file access + standard domain + low/medium complexity → Path B.
 
 ### Path C: Claude Code Agent (deep reasoning) — ACTIVE
 
-Use for: architecture review, complex security, anything requiring multi-step reasoning or file access.
+Use for: architecture review, complex security, anything requiring multi-step reasoning.
 
 ```python
 # Orchestrator spawns via Agent tool
@@ -469,7 +489,7 @@ Agent(subagent_type="ai-delegate:architecture-expert", prompt="...")
 
 Expert gets: full Claude intelligence + all tools (Read, Grep, Glob, Bash).
 
-**Decision rule:** Requires Claude-level reasoning OR needs to read files → Path C.
+**Decision rule:** Needs file access + deep domain (architecture/migration) OR high complexity → Path C.
 
 ---
 
@@ -808,7 +828,8 @@ Both formats are supported. `schema_version: "1.0"` presence indicates the canon
 | `consensus.py` | Extracted ConsensusCalculator (pure aggregation, no agent logic) |
 | `complexity.py` | ComplexityAssessor — deterministic content complexity scoring |
 | `selector.py` | ExpertSelector — minimum expert set selection |
-| `path_selector.py` | ModelAssigner + ExecutionPath — path A vs C assignment |
+| `model_assigner.py` | ModelAssigner + ExecutionPath — path A/B/C assignment |
+| `agent_executor.py` | AgentExecutor + AgentPool — Path B subprocess runner |
 | `cache.py` | FindingsCache — content-hash keyed findings cache |
 | `agents/orchestrator.md` | The brain — Claude Code orchestrator agent |
 
@@ -827,7 +848,6 @@ Both formats are supported. `schema_version: "1.0"` presence indicates the canon
 | Feature | Status |
 |---------|--------|
 | `sparse_topology_k` in models.py | Keep field but do not expand. Defer sparse topology optimization to Phase 2+ after measuring token spend. |
-| Path B (ollama launch) | Verify CLI interface + security before implementing |
 
 ---
 
@@ -893,7 +913,8 @@ All existing `ai-delegate audit/analyze/...` commands continue to work. New file
 - `tests/test_consensus_extracted.py` — ConsensusCalculator extracted to consensus.py
 - `tests/test_complexity.py` — ComplexityAssessor (already partially exists, expand)
 - `tests/test_selector.py` — ExpertSelector (minimum set, no overlap, cap by level)
-- `tests/test_path_selector.py` — ModelAssigner (path A vs C decision rules)
+- `tests/test_model_assigner.py` — ModelAssigner (path A/B/C decision rules)
+- `tests/test_agent_executor.py` — AgentExecutor + AgentPool (Path B subprocess)
 - `tests/test_cache.py` — FindingsCache (get/set/expire/key collision)
 
 **Trust file for dev:**
@@ -942,7 +963,7 @@ def check_cache(
 
 | Test File | Impact | Action |
 |-----------|--------|--------|
-| `test_router.py` (~40 tests) | SmartRouter removed | Rewrite as `test_path_selector.py` (ModelAssigner tests) |
+| `test_router.py` (~40 tests) | SmartRouter removed | Rewrite as `test_model_assigner.py` (ModelAssigner tests — already done) |
 | `test_expert_runner.py` (~30 tests) | ExpertRunner removed | Rewrite as orchestrator integration tests with mock Agent responses |
 | `test_debate_phase.py` (~30 tests) | DebatePhase removed | Extract DebatePhase tests into orchestrator integration tests |
 | `test_supervisor.py` (~30 tests) | Supervisor removed | Delete — no replacement needed |
