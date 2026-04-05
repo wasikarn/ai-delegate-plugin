@@ -21,6 +21,7 @@ from .models import Finding, Verdict, ExpertResult, ConsensusResult, TaskConfig,
 from .consensus import ConsensusCalculator, normalize_finding
 from .complexity import ComplexityAssessor, ComplexityScore
 from .catalog import AgentCatalog, AgentMetadata, DOMAIN_KEYWORDS
+from .debate_runner import DisputedFindingsBundle, DebateResult
 from .debate.orchestrator import (
     DebateOrchestrator,
     ExpertRunner,
@@ -75,6 +76,9 @@ __all__ = [
     "AgentCatalog",
     "AgentMetadata",
     "DOMAIN_KEYWORDS",
+    # Debate Runner (Path D)
+    "DisputedFindingsBundle",
+    "DebateResult",
     # Orchestrator components
     "DebateOrchestrator",
     "ExpertRunner",
