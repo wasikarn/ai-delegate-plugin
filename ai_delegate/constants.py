@@ -83,24 +83,32 @@ MODEL_INFO: Dict[str, ModelSpec] = {
         "parameters": "~3B",
         "context_window": 200_000,
         "modalities": ["text", "image"],
-        "benchmarks": {},  # Varies by version
-        "features": ["vision", "tools", "streaming"],
+        "benchmarks": {
+            # Haiku focuses on speed, not published benchmarks
+        },
+        "features": ["vision", "tools", "fast"],
         "provider": "anthropic",
     },
     Models.CLAUDE_SONNET: {
         "parameters": "~70B",
-        "context_window": 200_000,
+        "context_window": 200_000,  # 1M available
         "modalities": ["text", "image"],
-        "benchmarks": {},  # Varies by version
-        "features": ["vision", "tools", "streaming", "extended_thinking"],
+        "benchmarks": {
+            "swe_bench": 79.6,
+            "terminal_bench": 59.1,
+        },
+        "features": ["vision", "tools", "extended_thinking", "adaptive"],
         "provider": "anthropic",
     },
     Models.CLAUDE_OPUS: {
         "parameters": "~400B",
-        "context_window": 200_000,
+        "context_window": 200_000,  # 1M available
         "modalities": ["text", "image"],
-        "benchmarks": {},  # Varies by version
-        "features": ["vision", "tools", "streaming", "extended_thinking"],
+        "benchmarks": {
+            "swe_bench": 80.8,
+            "terminal_bench": 65.4,
+        },
+        "features": ["vision", "tools", "extended_thinking", "adaptive"],
         "provider": "anthropic",
     },
 }
