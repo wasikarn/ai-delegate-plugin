@@ -4,7 +4,7 @@ Centralized configuration for AI Delegation Framework.
 All hardcoded values are centralized here for easy configuration.
 """
 
-from typing import Dict, List
+from typing import Dict, List, TypedDict
 from enum import Enum
 
 
@@ -24,6 +24,86 @@ class Models:
     GLM_5_CLOUD = "glm-5:cloud"
     KIMI_K25_CLOUD = "kimi-k2.5:cloud"
     GEMMA4_31B_CLOUD = "gemma4:31b-cloud"
+
+
+# =============================================================================
+# Model Specifications
+# =============================================================================
+
+class ModelSpec(TypedDict):
+    """Model specification with context window, modalities, and benchmarks."""
+    parameters: str           # e.g., "30.7B dense", "744B (40B active MoE)"
+    context_window: int       # Maximum context length in tokens
+    modalities: List[str]     # ["text"], ["text", "image"], etc.
+    benchmarks: Dict[str, float]  # Key benchmark scores
+    features: List[str]       # e.g., ["tools", "thinking", "vision"]
+    provider: str             # "ollama" or "anthropic"
+
+
+# Model specifications from official Ollama library and Anthropic docs (April 2026)
+# Sources: ollama.com/library/glm-5:cloud, ollama.com/library/kimi-k2.5:cloud,
+#          ollama.com/library/gemma4:31b-cloud, platform.claude.com/docs/pricing
+MODEL_INFO: Dict[str, ModelSpec] = {
+    # Ollama Cloud models
+    Models.GLM_5_CLOUD: {
+        "parameters": "744B (40B active MoE)",
+        "context_window": 198_000,
+        "modalities": ["text"],
+        "benchmarks": {
+            "aime_2026": 92.7,
+            "gpqa_diamond": 86.0,
+            "swe_bench": 77.8,
+        },
+        "features": ["tools", "thinking"],
+        "provider": "ollama",
+    },
+    Models.KIMI_K25_CLOUD: {
+        "parameters": "15T visual+text tokens",
+        "context_window": 256_000,
+        "modalities": ["text", "image"],
+        "benchmarks": {},  # Not published
+        "features": ["vision", "tools", "thinking", "agent_swarm"],
+        "provider": "ollama",
+    },
+    Models.GEMMA4_31B_CLOUD: {
+        "parameters": "30.7B dense",
+        "context_window": 256_000,
+        "modalities": ["text", "image"],
+        "benchmarks": {
+            "aime_2026": 89.2,
+            "livecodebench": 80.0,
+            "mmlu_pro": 85.2,
+            "gpqa_diamond": 84.3,
+        },
+        "features": ["vision", "tools", "thinking"],
+        "provider": "ollama",
+    },
+    # Claude models (Anthropic)
+    Models.CLAUDE_HAIKU: {
+        "parameters": "~3B",
+        "context_window": 200_000,
+        "modalities": ["text", "image"],
+        "benchmarks": {},  # Varies by version
+        "features": ["vision", "tools", "streaming"],
+        "provider": "anthropic",
+    },
+    Models.CLAUDE_SONNET: {
+        "parameters": "~70B",
+        "context_window": 200_000,
+        "modalities": ["text", "image"],
+        "benchmarks": {},  # Varies by version
+        "features": ["vision", "tools", "streaming", "extended_thinking"],
+        "provider": "anthropic",
+    },
+    Models.CLAUDE_OPUS: {
+        "parameters": "~400B",
+        "context_window": 200_000,
+        "modalities": ["text", "image"],
+        "benchmarks": {},  # Varies by version
+        "features": ["vision", "tools", "streaming", "extended_thinking"],
+        "provider": "anthropic",
+    },
+}
 
 
 # =============================================================================

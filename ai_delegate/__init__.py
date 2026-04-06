@@ -39,6 +39,8 @@ from .constants import (
     CLIPriority,
     TaskTypes,
     ExpertDomains,
+    MODEL_INFO,
+    ModelSpec,
 )
 
 __all__ = [
@@ -87,6 +89,8 @@ __all__ = [
     "CLIPriority",
     "TaskTypes",
     "ExpertDomains",
+    "MODEL_INFO",
+    "ModelSpec",
     # Config
     "TASK_DISPLAY_NAMES",
     "TASK_EXPERT_DESCRIPTIONS",
