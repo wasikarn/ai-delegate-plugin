@@ -1,18 +1,6 @@
 {
-  "description": "Hooks for ai-delegate plugin — auto-setup, routing, context injection, and quality gates",
+  "description": "Hooks for ai-delegate plugin — routing, context injection, and quality gates (SessionStart removed for OMC compatibility)",
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -c \"import ai_delegate\" 2>/dev/null || pip3 install -e \"${CLAUDE_PLUGIN_ROOT}\" --break-system-packages --quiet",
-            "timeout": 30,
-            "statusMessage": "Checking ai-delegate installation..."
-          }
-        ]
-      }
-    ],
     "UserPromptSubmit": [
       {
         "hooks": [

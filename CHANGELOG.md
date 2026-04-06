@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### Hooks Optimization — OMC Compatibility
+
+- **SessionStart hook removed** — No longer auto-installs Python package on every session
+  - Reduces session startup overhead (~2-5s per session)
+  - Prevents duplicate hooks when used alongside OMC plugin
+  - Installation now requires manual `pip install -e` once per environment
+  - README updated with installation note
+
 ### Added
 
 #### Phase 1A Foundation — Pure Module Extraction

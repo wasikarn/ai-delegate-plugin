@@ -99,7 +99,6 @@ config = TaskConfig.from_task_type("audit", sparse_topology_k=2)
 
 ### 🪝 Hooks System
 
-- **SessionStart** - Auto-install Python package
 - **UserPromptSubmit** - Keyword detection for analysis tasks
 - **PreToolUse** - Validate ai-delegate commands
 - **PostToolUse** - Auto-audit sensitive files
@@ -154,11 +153,17 @@ Then restart Claude Code.
 One-time installation (required for CLI commands):
 
 ```bash
+# Core package
 pip install -e /path/to/ai-delegate-plugin --break-system-packages
 
 # Optional: Anthropic SDK for Ollama proxy support (GLM, Kimi cloud models)
 pip install 'ai-delegate[sdk]'
+
+# For development with test dependencies
+pip install -e '/path/to/ai-delegate-plugin[dev]'
 ```
+
+> **Note:** The SessionStart hook was removed to reduce overhead when used alongside other plugins (like OMC). Run the installation command once manually instead.
 
 Verify:
 
