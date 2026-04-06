@@ -31,15 +31,9 @@ VALID_MODELS = {
     Models.CLAUDE_HAIKU,
     Models.CLAUDE_SONNET,
     Models.CLAUDE_OPUS,
-    # Ollama models
+    # Ollama models (cloud)
     Models.GLM_5_CLOUD,
     Models.KIMI_K25_CLOUD,
-    # Gemini models
-    Models.GEMINI_20_FLASH,
-    Models.GEMINI_25_PRO,
-    # Codex models
-    Models.GPT_4O,
-    Models.O3_MINI,
 }
 
 # Prompt safety patterns to detect

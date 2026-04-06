@@ -2,7 +2,7 @@
 AI Delegation Framework
 
 Multi-agent adaptive delegation framework with domain expert debate system.
-Supports multiple backends: ollama, gemini, codex.
+Supports Ollama (GLM/Kimi cloud) with Claude fallback.
 """
 
 __version__ = "0.3.0"

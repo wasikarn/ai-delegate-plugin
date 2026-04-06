@@ -512,7 +512,7 @@ class TestCreateClient:
 
 
 # =============================================================================
-# Task 3: stdin fix, codex/gemini runners, error classification
+# Task 3: stdin fix, error classification
 # =============================================================================
 
 class TestCLIExecutorStdin:
@@ -610,50 +610,6 @@ class TestRunOllamaSDK:
         finally:
             if original is not None:
                 sys.modules["anthropic"] = original
-
-
-class TestRunCodex:
-    @patch("ai_delegate.client.subprocess.run")
-    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_run_codex_uses_exec_full_auto(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="analysis result", stderr="")
-        client = BackendClient(model="glm-5:cloud", cli_type="codex")
-        client.run("analyze this", json_output=False)
-        cmd = mock_run.call_args[0][0]
-        assert "codex" in cmd
-        assert "exec" in cmd
-        assert "--full-auto" in cmd
-
-    @patch("ai_delegate.client.subprocess.run")
-    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_run_codex_passes_prompt_via_stdin(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
-        client = BackendClient(model="o3-mini", cli_type="codex")
-        client.run("my prompt", json_output=False)
-        assert mock_run.call_args[1].get("input") == "my prompt"
-
-
-class TestRunGemini:
-    @patch("ai_delegate.client.subprocess.run")
-    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_run_gemini_uses_yolo_flag(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"findings": []}', stderr="")
-        client = BackendClient(model="gemini-2.0-flash", cli_type="gemini")
-        client.run("analyze", json_output=False)
-        cmd = mock_run.call_args[0][0]
-        assert "gemini" in cmd
-        assert "--yolo" in cmd
-
-    @patch("ai_delegate.client.subprocess.run")
-    @patch("ai_delegate.client.shutil.which", return_value="/usr/bin/ollama")
-    def test_run_gemini_uses_p_flag(self, mock_which, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
-        client = BackendClient(model="gemini-2.0-flash", cli_type="gemini")
-        client.run("my prompt", json_output=False)
-        cmd = mock_run.call_args[0][0]
-        assert "-p" in cmd
-        p_idx = cmd.index("-p")
-        assert cmd[p_idx + 1] == "my prompt"
 
 
 class TestErrorClassification:

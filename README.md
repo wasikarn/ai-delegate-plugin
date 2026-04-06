@@ -46,8 +46,6 @@
 Automatically selects the best available AI CLI and model for each task:
 
 - **Ollama** (glm-5:cloud, kimi-k2.5:cloud) - Anthropic SDK via localhost:11434 proxy
-- **Gemini** (gemini-2.0-flash, gemini-2.5-pro) - Fast, multimodal
-- **Codex** (gpt-4o, o3-mini) - Code generation, reasoning
 - **Claude** (sonnet, opus) - Fallback, safety
 
 ### 💰 Token Optimization (82-98% Savings)
@@ -202,7 +200,7 @@ ai-delegate architecture --file src/architecture.md
 ai-delegate review --file src/main.py
 
 # Override model
-ai-delegate audit --model gemini-2.0-flash --file src/auth.py
+ai-delegate audit --model kimi-k2.5:cloud --file src/auth.py
 
 # Use deep tier explicitly
 ai-delegate audit --tier deep --file src/auth.py
@@ -339,7 +337,7 @@ poetry.lock
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Smart Router                            │
-│  Detects: Ollama ✓ | Gemini ✓ | Codex ✗ | Claude ✓         │
+│  Detects: Ollama ✓ | Claude ✓                              │
 │  Selects: Ollama/glm-5:cloud for "audit"                   │
 └─────────────────────────────────────────────────────────────┘
                             │

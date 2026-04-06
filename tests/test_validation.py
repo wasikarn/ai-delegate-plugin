@@ -131,9 +131,9 @@ class TestModelNameValidation:
             result = validate_model_name(model)
             assert result.valid, f"Valid model rejected: {model}"
 
-    def test_valid_gemini_models(self):
-        """Test validation of valid Gemini model names."""
-        valid_models = ["gemini-2.0-flash", "gemini-2.5-pro"]
+    def test_valid_ollama_models(self):
+        """Test validation of valid Ollama model names."""
+        valid_models = ["glm-5:cloud", "kimi-k2.5:cloud", "haiku", "sonnet", "opus"]
         for model in valid_models:
             result = validate_model_name(model)
             assert result.valid, f"Valid model rejected: {model}"

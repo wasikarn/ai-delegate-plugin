@@ -331,8 +331,8 @@ class TestTaskConfigNewFields:
         self, audit_config: TaskConfig
     ):
         """expert_models should be settable."""
-        audit_config.expert_models = {"owasp": "gpt-4o", "auth": "gemini-2.5-pro"}
-        assert audit_config.expert_models == {"owasp": "gpt-4o", "auth": "gemini-2.5-pro"}
+        audit_config.expert_models = {"owasp": "claude-sonnet-4-6", "auth": "kimi-k2.5:cloud"}
+        assert audit_config.expert_models == {"owasp": "claude-sonnet-4-6", "auth": "kimi-k2.5:cloud"}
 
     def test_sparse_topology_k_can_be_set(
         self, audit_config: TaskConfig

@@ -24,14 +24,6 @@ class Models:
     GLM_5_CLOUD = "glm-5:cloud"
     KIMI_K25_CLOUD = "kimi-k2.5:cloud"
 
-    # Gemini models
-    GEMINI_20_FLASH = "gemini-2.0-flash"
-    GEMINI_25_PRO = "gemini-2.5-pro"
-
-    # Codex models
-    GPT_4O = "gpt-4o"
-    O3_MINI = "o3-mini"
-
 
 # =============================================================================
 # Token Limits
@@ -111,7 +103,7 @@ class TimeoutConfig:
     Cloud models (GLM, Kimi via Ollama proxy) can take 60-180s per call.
     Local subprocess calls are fast (<10s).
     """
-    SUBPROCESS = 60        # subprocess: ollama run, gemini, codex
+    SUBPROCESS = 60        # subprocess: ollama run
     SDK_LOCAL = 60         # SDK → local Ollama (fast models, no :cloud suffix)
     SDK_CLOUD = 180        # SDK → cloud proxy (GLM, Kimi: 60-180s latency)
 
@@ -135,10 +127,8 @@ class CLIPriority:
     """CLI fallback priority (lower = higher priority)."""
 
     OLLAMA = 1
-    GEMINI = 2
-    CODEX = 3
-    CLAUDE = 4
-    GLM = 5
+    CLAUDE = 2
+    GLM = 3
 
 
 # =============================================================================
@@ -241,26 +231,6 @@ OLLAMA_MODELS: Dict[str, str] = {
     TaskTypes.REVIEW: Models.KIMI_K25_CLOUD,
 }
 
-# Gemini models by task
-GEMINI_MODELS: Dict[str, str] = {
-    TaskTypes.AUDIT: Models.GEMINI_20_FLASH,
-    TaskTypes.ANALYZE: Models.GEMINI_20_FLASH,
-    TaskTypes.ARCHITECTURE: Models.GEMINI_25_PRO,
-    TaskTypes.REFACTOR: Models.GEMINI_20_FLASH,
-    TaskTypes.MIGRATE: Models.GEMINI_25_PRO,
-    TaskTypes.REVIEW: Models.GEMINI_25_PRO,
-}
-
-# Codex models by task
-CODEX_MODELS: Dict[str, str] = {
-    TaskTypes.AUDIT: Models.GPT_4O,
-    TaskTypes.ANALYZE: Models.GPT_4O,
-    TaskTypes.ARCHITECTURE: Models.O3_MINI,
-    TaskTypes.REFACTOR: Models.GPT_4O,
-    TaskTypes.MIGRATE: Models.O3_MINI,
-    TaskTypes.REVIEW: Models.O3_MINI,
-}
-
 # Claude models by task (fallback)
 CLAUDE_MODELS: Dict[str, str] = {
     TaskTypes.AUDIT: Models.CLAUDE_SONNET,
@@ -287,10 +257,9 @@ GLM_MODELS: Dict[str, str] = {
 _MODEL_CLI_MAP: Dict[str, str] = {
     "glm": "ollama",
     "kimi": "ollama",
-    "gemini": "gemini",
-    "gpt": "codex",
-    "o3": "codex",
-    "o1": "codex",
+    "haiku": "claude",
+    "sonnet": "claude",
+    "opus": "claude",
     "claude": "claude",
 }
 
@@ -310,8 +279,6 @@ def _cli_for_model(model: str) -> str:
 
 CLI_STRENGTHS = {
     "ollama": ["structured_output", "security", "performance", "architecture"],
-    "gemini": ["fast", "reasoning", "multimodal"],
-    "codex": ["code_generation", "reasoning", "documentation"],
     "claude": ["reasoning", "structured_output", "safety"],
     "glm": ["chinese_market", "structured_output", "cloud"],
 }
@@ -342,18 +309,9 @@ class HealthConfig:
 # CLI_PRIORS: pre-seeded win rates stored as virtual runs at _init_db() time.
 # win_rate=0.80 → 8 wins, 2 losses out of 10 virtual runs
 CLI_PRIORS: Dict[str, Dict[str, float]] = {
-    "codex": {"architecture": 0.80, "refactor": 0.75, "migrate": 0.75},
     "claude": {"audit": 0.80, "analyze": 0.75, "review": 0.75},
     "ollama": {
         "audit": 0.70,
-        "analyze": 0.70,
-        "architecture": 0.65,
-        "review": 0.70,
-        "refactor": 0.65,
-        "migrate": 0.65,
-    },
-    "gemini": {
-        "audit": 0.65,
         "analyze": 0.70,
         "architecture": 0.65,
         "review": 0.70,

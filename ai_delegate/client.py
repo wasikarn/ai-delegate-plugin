@@ -1,7 +1,7 @@
 """
 AI Client with rate limiting and fallback support.
 
-Supports multiple backends: ollama (default), gemini, codex.
+Supports Ollama (default) and Claude (fallback) backends.
 
 Architecture follows Single Responsibility Principle:
 - CLIExecutor: subprocess execution
@@ -398,15 +398,7 @@ class BackendClient(AIClient):
         if validation_result.warning:
             logger.warning(f"Prompt validation warning: {validation_result.warning}")
 
-        if self.cli_type == "codex":
-            return self._run_with_error_handling(
-                lambda: self._run_codex(effective_prompt), "codex"
-            )
-        elif self.cli_type == "gemini":
-            return self._run_with_error_handling(
-                lambda: self._run_gemini(effective_prompt, json_output), "gemini"
-            )
-        elif self.cli_type == "claude":
+        if self.cli_type == "claude":
             return self._run_with_error_handling(
                 lambda: self._run_fallback(effective_prompt), "claude"
             )
@@ -477,22 +469,6 @@ class BackendClient(AIClient):
             if rate_limit_error:
                 raise rate_limit_error
             raise RuntimeError(f"Ollama SDK call failed: {e}") from e
-
-    def _run_codex(self, prompt: str) -> str:
-        """Execute Codex CLI non-interactively via stdin."""
-        model = self.model if self.model in ("o3-mini", "gpt-4o") else "o3-mini"
-        cmd = ["codex", "exec", "--full-auto", "-m", model]
-        output = self.executor.execute(cmd, input=prompt)
-        return self.output_processor.process(output)
-
-    def _run_gemini(self, prompt: str, json_output: bool) -> str:
-        """Execute Gemini CLI non-interactively."""
-        model = self.model if "gemini" in self.model else "gemini-2.0-flash"
-        cmd = ["gemini", "-p", prompt, "-m", model, "--yolo"]
-        if json_output:
-            cmd.extend(["-o", "json"])
-        output = self.executor.execute(cmd)
-        return self.output_processor.process(output)
 
     def _run_fallback(self, prompt: str) -> str:
         """Run fallback using Claude CLI."""

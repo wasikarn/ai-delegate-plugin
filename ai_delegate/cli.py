@@ -1,7 +1,7 @@
 """
 CLI interface for AI Delegation Framework.
 
-Supports multiple backends: ollama, gemini, codex.
+Supports multiple backends: ollama (default), claude (fallback).
 """
 
 import argparse
@@ -22,16 +22,12 @@ from .config import (
 from .validation import validate_file_path
 from .constants import (
     OLLAMA_MODELS,
-    GEMINI_MODELS,
-    CODEX_MODELS,
     CLAUDE_MODELS,
 )
 
 # Reverse-lookup: model name → CLI prefix (built once at import time)
 _MODEL_CLI_MAP = {
     **{m: "ollama" for m in OLLAMA_MODELS.values()},
-    **{m: "gemini" for m in GEMINI_MODELS.values()},
-    **{m: "codex"  for m in CODEX_MODELS.values()},
     **{m: "claude" for m in CLAUDE_MODELS.values()},
 }
 

@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+#### Strategic Consolidation
+
+- **Removed docs/superpowers directory** — Plans and specs for debate system features
+  - ai-delegate-plugin focuses on core debate orchestration capability
+  - Complex orchestration patterns better served by oh-my-claudecode (OMC)
+  - Removed 19 plan/spec files from docs/superpowers/{plans,specs}
+
 ### Changed
+
+#### CLI Backend Consolidation
+
+- **Removed Gemini and Codex CLI support** — Consolidated to Ollama + Claude fallback
+  - Simplified architecture: single primary backend (Ollama SDK) with Claude fallback
+  - Removed `_run_gemini()` and `_run_codex()` methods from `BackendClient`
+  - Removed `GEMINI_MODELS`, `CODEX_MODELS` from constants
+  - Removed Gemini/Codex from `CLI_STRENGTHS`, `CLI_PRIORS`, `_MODEL_CLI_MAP`
+  - Updated tests to use Ollama/Claude models only
+  - Documentation updated to reflect consolidated backend support
 
 #### Hooks Optimization — OMC Compatibility
 

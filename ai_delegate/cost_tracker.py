@@ -8,7 +8,6 @@ from typing import Dict, List, Optional
 TOKEN_COSTS: Dict[str, Dict[str, float]] = {
     "glm-5:cloud": {"input": 0.07, "output": 0.28},
     "kimi-k2.5:cloud": {"input": 0.14, "output": 0.56},
-    "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
     "claude-haiku": {"input": 0.25, "output": 1.25},
     "claude-sonnet": {"input": 3.0, "output": 15.0},
     "default": {"input": 0.14, "output": 0.56},

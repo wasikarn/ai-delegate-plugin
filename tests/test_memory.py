@@ -284,13 +284,13 @@ class TestCliPerformanceMethods:
             findings_summary="SQL injection; Missing rate limit; Weak password policy",
         )
         run_id = memory.store(record)
-        memory.record_cli_run(run_id, "codex")
+        memory.record_cli_run(run_id, "ollama")
         memory.store_rating(run_id, 1)  # win
         perf = memory.get_cli_performance("audit")
-        codex_perf = [p for p in perf if p["cli_name"] == "codex"][0]
-        assert codex_perf["win_count"] > 0
-        assert codex_perf["run_count"] > 0
-        assert codex_perf["win_rate"] > 0
+        ollama_perf = [p for p in perf if p["cli_name"] == "ollama"][0]
+        assert ollama_perf["win_count"] > 0
+        assert ollama_perf["run_count"] > 0
+        assert ollama_perf["win_rate"] > 0
 
     def test_store_rating_handles_loss(self, memory):
         """Test that store_rating() with rating=0 increments loss_count."""
@@ -304,12 +304,12 @@ class TestCliPerformanceMethods:
             findings_summary="SQL injection; Missing rate limit; Weak password policy",
         )
         run_id = memory.store(record)
-        memory.record_cli_run(run_id, "gemini")
+        memory.record_cli_run(run_id, "claude")
         memory.store_rating(run_id, 0)  # loss
         perf = memory.get_cli_performance("audit")
-        gemini_perf = [p for p in perf if p["cli_name"] == "gemini"][0]
-        assert gemini_perf["loss_count"] > 0
-        assert gemini_perf["run_count"] > 0
+        claude_perf = [p for p in perf if p["cli_name"] == "claude"][0]
+        assert claude_perf["loss_count"] > 0
+        assert claude_perf["run_count"] > 0
 
     def test_get_cli_performance_returns_sorted_by_win_rate(self, memory):
         """Test that get_cli_performance() returns CLIs sorted by win_rate descending."""
@@ -336,7 +336,7 @@ class TestCliPerformanceMethods:
             findings_summary="SQL injection; Missing rate limit",
         )
         run_id2 = memory.store(record2)
-        memory.record_cli_run(run_id2, "codex")
+        memory.record_cli_run(run_id2, "claude")
         memory.store_rating(run_id2, 0)
 
         perf = memory.get_cli_performance("audit")
@@ -391,4 +391,4 @@ class TestCliPerformanceMethods:
         # Should have entries for all CLIs in CLI_PRIORS
         assert len(perf) > 0
         cli_names = [p["cli_name"] for p in perf]
-        assert any(name in cli_names for name in ["ollama", "codex", "gemini", "claude"])
+        assert any(name in cli_names for name in ["ollama", "claude"])
