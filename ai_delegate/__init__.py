@@ -42,6 +42,24 @@ from .constants import (
     MODEL_INFO,
     ModelSpec,
 )
+from .model_selector import (
+    get_model_for_context,
+    get_vision_capable_models,
+    get_tools_capable_models,
+    get_best_for_coding,
+    get_best_for_reasoning,
+    get_best_for_long_context,
+    get_cheapest_model,
+    get_fastest_model,
+    supports_vision,
+    supports_tools,
+    supports_extended_thinking,
+    get_model_for_task,
+    get_model_info,
+    list_models,
+    get_context_window,
+    get_benchmark,
+)
 
 __all__ = [
     # Clients
@@ -91,6 +109,23 @@ __all__ = [
     "ExpertDomains",
     "MODEL_INFO",
     "ModelSpec",
+    # Model Selector
+    "get_model_for_context",
+    "get_vision_capable_models",
+    "get_tools_capable_models",
+    "get_best_for_coding",
+    "get_best_for_reasoning",
+    "get_best_for_long_context",
+    "get_cheapest_model",
+    "get_fastest_model",
+    "supports_vision",
+    "supports_tools",
+    "supports_extended_thinking",
+    "get_model_for_task",
+    "get_model_info",
+    "list_models",
+    "get_context_window",
+    "get_benchmark",
     # Config
     "TASK_DISPLAY_NAMES",
     "TASK_EXPERT_DESCRIPTIONS",
