@@ -4,14 +4,19 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 
-# Cost per 1M tokens (USD) — approximate public pricing
+# Cost per 1M tokens (USD)
+# Note: Ollama Cloud uses subscription model ($0/20/100/mo), not per-token billing.
+# Costs below are for Claude models only. Ollama cloud models have $0 cost.
 TOKEN_COSTS: Dict[str, Dict[str, float]] = {
-    "glm-5:cloud": {"input": 0.07, "output": 0.28},
-    "kimi-k2.5:cloud": {"input": 0.14, "output": 0.56},
-    "gemma4:31b-cloud": {"input": 0.10, "output": 0.40},
+    # Ollama Cloud models (subscription-based, no per-token cost)
+    "glm-5:cloud": {"input": 0.0, "output": 0.0},
+    "kimi-k2.5:cloud": {"input": 0.0, "output": 0.0},
+    "gemma4:31b-cloud": {"input": 0.0, "output": 0.0},
+    # Claude models (actual per-token pricing)
     "claude-haiku": {"input": 0.25, "output": 1.25},
     "claude-sonnet": {"input": 3.0, "output": 15.0},
-    "default": {"input": 0.14, "output": 0.56},
+    # Default fallback
+    "default": {"input": 0.0, "output": 0.0},
 }
 
 
