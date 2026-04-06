@@ -1,0 +1,266 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775439366401,
+  "projectRoot": "/Users/kobig/Codes/Personals/ai-delegate-plugin",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Python",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "pyproject.toml"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "pytest",
+        "version": null,
+        "category": "testing"
+      }
+    ],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": "pytest",
+    "lintCommand": "ruff check",
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "develop",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "agents": {
+      "path": "agents",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1775439366392,
+      "keyFiles": [
+        "architecture-expert.md",
+        "code-quality-expert.md",
+        "database-expert.md",
+        "migrate-expert.md",
+        "performance-expert.md"
+      ]
+    },
+    "ai_delegate": {
+      "path": "ai_delegate",
+      "purpose": null,
+      "fileCount": 24,
+      "lastAccessed": 1775439366393,
+      "keyFiles": [
+        "__init__.py",
+        "__main__.py",
+        "agent_executor.py",
+        "analysis_memory.py",
+        "batch.py"
+      ]
+    },
+    "commands": {
+      "path": "commands",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1775439366394,
+      "keyFiles": [
+        "ai-delegate.md"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 3,
+      "lastAccessed": 1775439366395,
+      "keyFiles": [
+        "architecture-flow.md",
+        "budget-mode.md",
+        "research-application.md"
+      ]
+    },
+    "hooks": {
+      "path": "hooks",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1775439366395,
+      "keyFiles": [
+        "analysis-summary.sh",
+        "auto-audit.sh",
+        "detect-analysis-task.sh",
+        "expert-context.sh",
+        "expert-gate.sh"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1775439366396,
+      "keyFiles": [
+        "create-release.sh"
+      ]
+    },
+    "skills": {
+      "path": "skills",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775439366396,
+      "keyFiles": []
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 36,
+      "lastAccessed": 1775439366397,
+      "keyFiles": [
+        "__init__.py",
+        "conftest.py",
+        "test_adjudicator.py",
+        "test_agent_executor.py",
+        "test_agent_pool.py"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "README.md",
+      "accessCount": 8,
+      "lastAccessed": 1775441440596,
+      "type": "file"
+    },
+    {
+      "path": "ai_delegate/constants.py",
+      "accessCount": 7,
+      "lastAccessed": 1775442001739,
+      "type": "directory"
+    },
+    {
+      "path": "tests/test_memory.py",
+      "accessCount": 6,
+      "lastAccessed": 1775441323469,
+      "type": "directory"
+    },
+    {
+      "path": "tests/test_client.py",
+      "accessCount": 6,
+      "lastAccessed": 1775441410934,
+      "type": "directory"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "accessCount": 6,
+      "lastAccessed": 1775441878256,
+      "type": "file"
+    },
+    {
+      "path": "ai_delegate/client.py",
+      "accessCount": 5,
+      "lastAccessed": 1775441191345,
+      "type": "directory"
+    },
+    {
+      "path": "ai_delegate/cli.py",
+      "accessCount": 4,
+      "lastAccessed": 1775441208286,
+      "type": "directory"
+    },
+    {
+      "path": "tests/test_validation.py",
+      "accessCount": 4,
+      "lastAccessed": 1775441406010,
+      "type": "directory"
+    },
+    {
+      "path": "",
+      "accessCount": 4,
+      "lastAccessed": 1775441853317,
+      "type": "directory"
+    },
+    {
+      "path": "ai_delegate/__init__.py",
+      "accessCount": 3,
+      "lastAccessed": 1775441231678,
+      "type": "directory"
+    },
+    {
+      "path": "tests/test_orchestrator.py",
+      "accessCount": 3,
+      "lastAccessed": 1775441335193,
+      "type": "directory"
+    },
+    {
+      "path": "ai_delegate/validation.py",
+      "accessCount": 3,
+      "lastAccessed": 1775442006304,
+      "type": "file"
+    },
+    {
+      "path": "ai_delegate/cost_tracker.py",
+      "accessCount": 3,
+      "lastAccessed": 1775442024097,
+      "type": "file"
+    },
+    {
+      "path": "hooks/hooks.json",
+      "accessCount": 2,
+      "lastAccessed": 1775440890704,
+      "type": "file"
+    },
+    {
+      "path": "CLAUDE.md",
+      "accessCount": 1,
+      "lastAccessed": 1775440358280,
+      "type": "file"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-04-05-phase3-orchestrator-cleanup.md",
+      "accessCount": 1,
+      "lastAccessed": 1775440365558,
+      "type": "file"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-04-05-path-d-peer-debate.md",
+      "accessCount": 1,
+      "lastAccessed": 1775440365761,
+      "type": "file"
+    },
+    {
+      "path": "hooks/detect-analysis-task.sh",
+      "accessCount": 1,
+      "lastAccessed": 1775440844860,
+      "type": "file"
+    },
+    {
+      "path": "tests",
+      "accessCount": 1,
+      "lastAccessed": 1775441215088,
+      "type": "directory"
+    },
+    {
+      "path": "ai_delegate",
+      "accessCount": 1,
+      "lastAccessed": 1775441348893,
+      "type": "directory"
+    }
+  ],
+  "userDirectives": []
+}

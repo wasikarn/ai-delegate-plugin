@@ -34,6 +34,7 @@ VALID_MODELS = {
     # Ollama models (cloud)
     Models.GLM_5_CLOUD,
     Models.KIMI_K25_CLOUD,
+    Models.GEMMA4_31B_CLOUD,
 }
 
 # Prompt safety patterns to detect

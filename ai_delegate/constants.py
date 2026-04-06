@@ -23,6 +23,7 @@ class Models:
     # Ollama models (cloud)
     GLM_5_CLOUD = "glm-5:cloud"
     KIMI_K25_CLOUD = "kimi-k2.5:cloud"
+    GEMMA4_31B_CLOUD = "gemma4:31b-cloud"
 
 
 # =============================================================================
@@ -257,6 +258,7 @@ GLM_MODELS: Dict[str, str] = {
 _MODEL_CLI_MAP: Dict[str, str] = {
     "glm": "ollama",
     "kimi": "ollama",
+    "gemma": "ollama",
     "haiku": "claude",
     "sonnet": "claude",
     "opus": "claude",
